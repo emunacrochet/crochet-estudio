@@ -97,7 +97,7 @@ export default function PatronesMosaicos() {
   const [xSize, setXSize] = useState(70);
   const [xColor, setXColor] = useState("#3F3F3F");
   const [showGrid, setShowGrid] = useState(true);
-  const [tool, setTool] = useState("mark");
+  const [tool, setTool] = useState("move");
   const [marks, setMarks] = useState(new Set());
   const [isDrawing, setIsDrawing] = useState(false);
   const [processedGrid, setProcessedGrid] = useState([]);
@@ -373,19 +373,14 @@ export default function PatronesMosaicos() {
     });
   };
 
-  const startDrawing = (event) => {
-    event.preventDefault();
-    setIsDrawing(true);
-    lastCellRef.current = null;
-    applyTool(event);
-  };
+   const startDrawing = (event) => {
+  if (tool === "move") return;
 
-  const continueDrawing = (event) => {
-    if (!isDrawing) return;
+  event.preventDefault();
+  applyTool(event);
+};
 
-    event.preventDefault();
-    applyTool(event);
-  };
+  const continueDrawing = () => {};
 
   const stopDrawing = () => {
     setIsDrawing(false);
@@ -830,7 +825,7 @@ export default function PatronesMosaicos() {
                     style={{
                       display: "block",
                       imageRendering: "pixelated",
-                      touchAction: "none",
+                      touchAction: tool === "move" ? "pan-x pan-y" : "none",
                       cursor:
                         tool === "mark" ? "crosshair" : "not-allowed",
                       maxWidth: "none",

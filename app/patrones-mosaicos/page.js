@@ -12,54 +12,50 @@ const COLORS = {
   white: "#FFFFFF",
   muted: "#746F6A",
   border: "#DED8D1",
-  softLilac: "#F2EBF8",
-  softMint: "#EAF7F3",
-  softPink: "#FDEBE8",
 };
 
-const colorDistance = (first, second) =>
+const distance = (a, b) =>
   Math.sqrt(
-    (first.r - second.r) ** 2 +
-      (first.g - second.g) ** 2 +
-      (first.b - second.b) ** 2
+    (a.r - b.r) ** 2 +
+      (a.g - b.g) ** 2 +
+      (a.b - b.b) ** 2
   );
 
 function kMeans(pixels, amount) {
   if (!pixels.length) return [];
 
-  const safeAmount = Math.min(amount, pixels.length);
-  const step = Math.max(1, Math.floor(pixels.length / safeAmount));
+  const step = Math.max(1, Math.floor(pixels.length / amount));
 
-  let centers = Array.from({ length: safeAmount }, (_, index) => ({
+  let centers = Array.from({ length: amount }, (_, index) => ({
     ...pixels[Math.min(index * step, pixels.length - 1)],
   }));
 
   for (let iteration = 0; iteration < 18; iteration += 1) {
-    const totals = Array.from({ length: safeAmount }, () => ({
+    const totals = Array.from({ length: amount }, () => ({
       r: 0,
       g: 0,
       b: 0,
       count: 0,
     }));
 
-    pixels.forEach((pixel) => {
-      let closestIndex = 0;
-      let closestDistance = Infinity;
+    for (const pixel of pixels) {
+      let bestIndex = 0;
+      let bestDistance = Infinity;
 
       centers.forEach((center, index) => {
-        const currentDistance = colorDistance(pixel, center);
+        const currentDistance = distance(pixel, center);
 
-        if (currentDistance < closestDistance) {
-          closestDistance = currentDistance;
-          closestIndex = index;
+        if (currentDistance < bestDistance) {
+          bestDistance = currentDistance;
+          bestIndex = index;
         }
       });
 
-      totals[closestIndex].r += pixel.r;
-      totals[closestIndex].g += pixel.g;
-      totals[closestIndex].b += pixel.b;
-      totals[closestIndex].count += 1;
-    });
+      totals[bestIndex].r += pixel.r;
+      totals[bestIndex].g += pixel.g;
+      totals[bestIndex].b += pixel.b;
+      totals[bestIndex].count += 1;
+    }
 
     centers = totals.map((total, index) =>
       total.count
@@ -75,38 +71,35 @@ function kMeans(pixels, amount) {
   return centers;
 }
 
-function findNearestColor(pixel, centers) {
-  let closestIndex = 0;
-  let closestDistance = Infinity;
+function nearestColor(pixel, centers) {
+  let bestIndex = 0;
+  let bestDistance = Infinity;
 
   centers.forEach((center, index) => {
-    const currentDistance = colorDistance(pixel, center);
+    const currentDistance = distance(pixel, center);
 
-    if (currentDistance < closestDistance) {
-      closestDistance = currentDistance;
-      closestIndex = index;
+    if (currentDistance < bestDistance) {
+      bestDistance = currentDistance;
+      bestIndex = index;
     }
   });
 
-  return closestIndex;
+  return bestIndex;
 }
 
 export default function PatronesMosaicos() {
-  const [imageMode, setImageMode] = useState("pixelated");
+  const [mode, setMode] = useState("pixelated");
   const [imageSrc, setImageSrc] = useState("");
-
   const [columns, setColumns] = useState(40);
   const [rows, setRows] = useState(0);
   const [numberOfColors, setNumberOfColors] = useState(5);
   const [zoom, setZoom] = useState(18);
-
   const [xSize, setXSize] = useState(70);
-  const [xColor, setXColor] = useState(COLORS.charcoal);
+  const [xColor, setXColor] = useState("#3F3F3F");
   const [showGrid, setShowGrid] = useState(true);
-
-  const [tool, setTool] = useState("move");
+  const [tool, setTool] = useState("mark");
   const [marks, setMarks] = useState(new Set());
-
+  const [isDrawing, setIsDrawing] = useState(false);
   const [processedGrid, setProcessedGrid] = useState([]);
   const [palette, setPalette] = useState([]);
   const [processing, setProcessing] = useState(false);
@@ -115,8 +108,7 @@ export default function PatronesMosaicos() {
   const canvasRef = useRef(null);
   const processingCanvasRef = useRef(null);
   const imageRef = useRef(null);
-
-  const pointerStartRef = useRef(null);
+  const lastCellRef = useRef(null);
 
   const calculateRows = useCallback(
     (image) => {
@@ -141,7 +133,7 @@ export default function PatronesMosaicos() {
       const calculatedRows = calculateRows(image);
       setRows(calculatedRows);
 
-      if (imageMode === "pixelated") {
+      if (mode === "pixelated") {
         setProcessedGrid([]);
         setPalette([]);
         setProcessing(false);
@@ -151,12 +143,6 @@ export default function PatronesMosaicos() {
       setProcessing(true);
 
       const hiddenCanvas = processingCanvasRef.current;
-
-      if (!hiddenCanvas) {
-        setProcessing(false);
-        return;
-      }
-
       const context = hiddenCanvas.getContext("2d", {
         willReadFrequently: true,
       });
@@ -189,9 +175,8 @@ export default function PatronesMosaicos() {
 
       setPalette(centers);
       setProcessedGrid(
-        pixels.map((pixel) => findNearestColor(pixel, centers))
+        pixels.map((pixel) => nearestColor(pixel, centers))
       );
-
       setProcessing(false);
     };
 
@@ -202,7 +187,7 @@ export default function PatronesMosaicos() {
     image.src = imageSrc;
   }, [
     imageSrc,
-    imageMode,
+    mode,
     columns,
     numberOfColors,
     calculateRows,
@@ -214,7 +199,7 @@ export default function PatronesMosaicos() {
 
   useEffect(() => {
     setMarks(new Set());
-  }, [imageSrc, columns, imageMode]);
+  }, [imageSrc, columns, mode]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -229,7 +214,7 @@ export default function PatronesMosaicos() {
 
     context.clearRect(0, 0, canvas.width, canvas.height);
 
-    if (imageMode === "common" && processedGrid.length) {
+    if (mode === "common" && processedGrid.length) {
       for (let row = 0; row < rows; row += 1) {
         for (let column = 0; column < columns; column += 1) {
           const index = row * columns + column;
@@ -250,7 +235,6 @@ export default function PatronesMosaicos() {
       }
     } else {
       context.imageSmoothingEnabled = false;
-
       context.drawImage(
         image,
         0,
@@ -261,7 +245,7 @@ export default function PatronesMosaicos() {
     }
 
     if (showGrid) {
-      context.strokeStyle = "rgba(63, 63, 63, 0.32)";
+      context.strokeStyle = "rgba(63, 63, 63, 0.30)";
       context.lineWidth = 1;
 
       for (let row = 0; row <= rows; row += 1) {
@@ -279,7 +263,7 @@ export default function PatronesMosaicos() {
       }
     }
 
-    const padding = (zoom * (1 - xSize / 100)) / 2;
+    const padding = zoom * (1 - xSize / 100) / 2;
 
     context.strokeStyle = xColor;
     context.lineWidth = Math.max(1.5, zoom * 0.13);
@@ -307,7 +291,7 @@ export default function PatronesMosaicos() {
     rows,
     columns,
     zoom,
-    imageMode,
+    mode,
     processedGrid,
     palette,
     showGrid,
@@ -324,18 +308,29 @@ export default function PatronesMosaicos() {
     reader.onload = (event) => {
       setImageSrc(event.target.result);
       setMarks(new Set());
-      setTool("move");
     };
 
     reader.readAsDataURL(file);
   };
 
-  const getCellFromPoint = (clientX, clientY) => {
+  const getCell = (event) => {
     const canvas = canvasRef.current;
 
     if (!canvas) return null;
 
     const rectangle = canvas.getBoundingClientRect();
+
+    const clientX =
+      event.clientX ??
+      event.touches?.[0]?.clientX ??
+      event.changedTouches?.[0]?.clientX;
+
+    const clientY =
+      event.clientY ??
+      event.touches?.[0]?.clientY ??
+      event.changedTouches?.[0]?.clientY;
+
+    if (clientX === undefined || clientY === undefined) return null;
 
     const scaleX = canvas.width / rectangle.width;
     const scaleY = canvas.height / rectangle.height;
@@ -358,45 +353,43 @@ export default function PatronesMosaicos() {
     return `${row}-${column}`;
   };
 
-  const handlePointerDown = (event) => {
-    pointerStartRef.current = {
-      x: event.clientX,
-      y: event.clientY,
-      pointerId: event.pointerId,
-    };
-  };
+  const applyTool = (event) => {
+    const cell = getCell(event);
 
-  const handlePointerUp = (event) => {
-    const start = pointerStartRef.current;
-    pointerStartRef.current = null;
+    if (!cell || cell === lastCellRef.current) return;
 
-    if (!start || tool === "move") return;
-    if (start.pointerId !== event.pointerId) return;
-
-    const movedX = Math.abs(event.clientX - start.x);
-    const movedY = Math.abs(event.clientY - start.y);
-
-    const isTap = movedX < 10 && movedY < 10;
-
-    if (!isTap) return;
-
-    const cell = getCellFromPoint(event.clientX, event.clientY);
-
-    if (!cell) return;
+    lastCellRef.current = cell;
 
     setMarks((previousMarks) => {
       const updatedMarks = new Set(previousMarks);
 
       if (tool === "mark") {
         updatedMarks.add(cell);
-      }
-
-      if (tool === "erase") {
+      } else {
         updatedMarks.delete(cell);
       }
 
       return updatedMarks;
     });
+  };
+
+  const startDrawing = (event) => {
+    event.preventDefault();
+    setIsDrawing(true);
+    lastCellRef.current = null;
+    applyTool(event);
+  };
+
+  const continueDrawing = (event) => {
+    if (!isDrawing) return;
+
+    event.preventDefault();
+    applyTool(event);
+  };
+
+  const stopDrawing = () => {
+    setIsDrawing(false);
+    lastCellRef.current = null;
   };
 
   const downloadPattern = () => {
@@ -405,7 +398,6 @@ export default function PatronesMosaicos() {
     if (!canvas) return;
 
     const link = document.createElement("a");
-
     link.download = "patron-mosaico-emuna.png";
     link.href = canvas.toDataURL("image/png");
     link.click();
@@ -416,8 +408,6 @@ export default function PatronesMosaicos() {
     setMarks(new Set());
     setProcessedGrid([]);
     setPalette([]);
-    setTool("move");
-
     imageRef.current = null;
 
     if (fileRef.current) {
@@ -425,38 +415,38 @@ export default function PatronesMosaicos() {
     }
   };
 
-  const buttonStyle = ({
-    active = false,
-    background = COLORS.white,
-    color = COLORS.charcoal,
-  } = {}) => ({
-    border: active
-      ? `2px solid ${COLORS.charcoal}`
+  const buttonStyle = (active = false, primary = false) => ({
+    border: active || primary
+      ? "1px solid transparent"
       : `1px solid ${COLORS.border}`,
-    background: active ? COLORS.charcoal : background,
-    color: active ? COLORS.white : color,
-    borderRadius: "11px",
-    padding: "11px 15px",
+    background: active
+      ? COLORS.charcoal
+      : primary
+        ? COLORS.lilac
+        : COLORS.white,
+    color: active ? COLORS.white : COLORS.charcoal,
+    borderRadius: "10px",
+    padding: "10px 14px",
     fontSize: "13px",
-    fontWeight: "700",
+    fontWeight: "600",
     cursor: "pointer",
   });
 
   const cardStyle = {
     background: COLORS.white,
     border: `1px solid ${COLORS.border}`,
-    borderRadius: "18px",
-    padding: "17px",
-    marginBottom: "15px",
-    boxShadow: "0 4px 14px rgba(63, 63, 63, 0.07)",
+    borderRadius: "16px",
+    padding: "16px",
+    marginBottom: "14px",
+    boxShadow: "0 3px 12px rgba(63, 63, 63, 0.06)",
   };
 
   const labelStyle = {
     display: "block",
     fontSize: "12px",
-    fontWeight: "700",
+    fontWeight: "600",
     color: COLORS.muted,
-    marginBottom: "7px",
+    marginBottom: "6px",
   };
 
   return (
@@ -467,43 +457,16 @@ export default function PatronesMosaicos() {
           background: COLORS.cream,
           color: COLORS.charcoal,
           fontFamily: "Arial, sans-serif",
-          paddingBottom: "55px",
+          padding: "22px 14px 50px",
         }}
       >
-        <header
-          style={{
-            background: COLORS.charcoal,
-            color: COLORS.white,
-            padding: "26px 16px",
-            borderBottom: `8px solid ${COLORS.lilac}`,
-          }}
-        >
-          <div
-            style={{
-              maxWidth: "1050px",
-              margin: "0 auto",
-            }}
-          >
-            <div
-              style={{
-                display: "inline-block",
-                background: COLORS.mint,
-                color: COLORS.charcoal,
-                borderRadius: "30px",
-                padding: "5px 11px",
-                fontSize: "11px",
-                fontWeight: "700",
-                marginBottom: "11px",
-              }}
-            >
-              EMUNÁ STUDIO
-            </div>
-
+        <div style={{ maxWidth: "1050px", margin: "0 auto" }}>
+          <header style={{ marginBottom: "22px" }}>
             <h1
               style={{
                 fontFamily: "Georgia, serif",
-                fontSize: "clamp(31px, 7vw, 50px)",
-                margin: "0 0 9px",
+                fontSize: "clamp(30px, 6vw, 48px)",
+                margin: "0 0 8px",
               }}
             >
               Patrones Mosaicos
@@ -511,62 +474,376 @@ export default function PatronesMosaicos() {
 
             <p
               style={{
-                maxWidth: "680px",
                 margin: 0,
-                fontSize: "14px",
-                lineHeight: 1.65,
-                opacity: 0.88,
+                color: COLORS.muted,
+                lineHeight: 1.6,
               }}
             >
-              Convertí una imagen o trabajá sobre un patrón ya
-              pixelado y marcá una X exactamente donde corresponda.
+              Subí tu imagen y marcá con una X los puntos que
+              correspondan. Las marcas permanecen en su lugar aunque
+              cambies el zoom.
             </p>
-          </div>
-        </header>
+          </header>
 
-        <div
-          style={{
-            maxWidth: "1050px",
-            margin: "0 auto",
-            padding: "20px 14px",
-          }}
-        >
           <section style={cardStyle}>
             <div
               style={{
                 fontFamily: "Georgia, serif",
-                fontSize: "21px",
+                fontSize: "19px",
                 fontWeight: "700",
-                marginBottom: "7px",
+                marginBottom: "12px",
               }}
             >
-              ¿Cómo querés comenzar?
+              Elegí cómo querés trabajar
             </div>
-
-            <p
-              style={{
-                margin: "0 0 15px",
-                color: COLORS.muted,
-                fontSize: "13px",
-                lineHeight: 1.6,
-              }}
-            >
-              Elegí la opción que corresponda a la imagen que vas a
-              subir.
-            </p>
 
             <div
               style={{
                 display: "grid",
                 gridTemplateColumns:
                   "repeat(auto-fit, minmax(220px, 1fr))",
-                gap: "12px",
+                gap: "10px",
               }}
             >
               <button
                 type="button"
-                onClick={() => setImageMode("common")}
+                onClick={() => setMode("common")}
                 style={{
-                  border:
-                    imageMode === "common"
-                     
+                  ...buttonStyle(mode === "common"),
+                  padding: "16px",
+                  textAlign: "left",
+                }}
+              >
+                <strong style={{ display: "block", marginBottom: "5px" }}>
+                  Imagen común
+                </strong>
+
+                <span
+                  style={{
+                    display: "block",
+                    fontWeight: "400",
+                    lineHeight: 1.5,
+                    opacity: 0.9,
+                  }}
+                >
+                  Emuná convierte la imagen en una cuadrícula y reduce
+                  la cantidad de colores.
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setMode("pixelated")}
+                style={{
+                  ...buttonStyle(mode === "pixelated"),
+                  padding: "16px",
+                  textAlign: "left",
+                }}
+              >
+                <strong style={{ display: "block", marginBottom: "5px" }}>
+                  Patrón ya pixelado
+                </strong>
+
+                <span
+                  style={{
+                    display: "block",
+                    fontWeight: "400",
+                    lineHeight: 1.5,
+                    opacity: 0.9,
+                  }}
+                >
+                  Conserva la imagen y coloca la cuadrícula y las X por
+                  encima.
+                </span>
+              </button>
+            </div>
+          </section>
+
+          {!imageSrc ? (
+            <section
+              onClick={() => fileRef.current?.click()}
+              onDragOver={(event) => event.preventDefault()}
+              onDrop={(event) => {
+                event.preventDefault();
+                uploadImage(event.dataTransfer.files?.[0]);
+              }}
+              style={{
+                ...cardStyle,
+                minHeight: "260px",
+                border: `2px dashed ${COLORS.lilac}`,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                textAlign: "center",
+                cursor: "pointer",
+              }}
+            >
+              <div
+                style={{
+                  width: "56px",
+                  height: "56px",
+                  borderRadius: "50%",
+                  background: COLORS.lilac,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: "32px",
+                  marginBottom: "14px",
+                }}
+              >
+                +
+              </div>
+
+              <div
+                style={{
+                  fontFamily: "Georgia, serif",
+                  fontSize: "21px",
+                  fontWeight: "700",
+                  marginBottom: "7px",
+                }}
+              >
+                Subí tu imagen
+              </div>
+
+              <div
+                style={{
+                  color: COLORS.muted,
+                  fontSize: "14px",
+                  lineHeight: 1.6,
+                }}
+              >
+                Tocá aquí para elegirla desde tu galería.
+              </div>
+
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/*"
+                hidden
+                onChange={(event) =>
+                  uploadImage(event.target.files?.[0])
+                }
+              />
+            </section>
+          ) : (
+            <>
+              <section style={cardStyle}>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns:
+                      "repeat(auto-fit, minmax(145px, 1fr))",
+                    gap: "14px",
+                  }}
+                >
+                  <div>
+                    <label style={labelStyle}>
+                      Columnas: {columns}
+                    </label>
+                    <input
+                      type="range"
+                      min="8"
+                      max="100"
+                      value={columns}
+                      onChange={(event) =>
+                        setColumns(Number(event.target.value))
+                      }
+                      style={{ width: "100%", accentColor: COLORS.lilac }}
+                    />
+                  </div>
+
+                  {mode === "common" && (
+                    <div>
+                      <label style={labelStyle}>
+                        Colores: {numberOfColors}
+                      </label>
+                      <input
+                        type="range"
+                        min="2"
+                        max="12"
+                        value={numberOfColors}
+                        onChange={(event) =>
+                          setNumberOfColors(Number(event.target.value))
+                        }
+                        style={{
+                          width: "100%",
+                          accentColor: COLORS.mint,
+                        }}
+                      />
+                    </div>
+                  )}
+
+                  <div>
+                    <label style={labelStyle}>Zoom: {zoom}</label>
+                    <input
+                      type="range"
+                      min="8"
+                      max="45"
+                      value={zoom}
+                      onChange={(event) =>
+                        setZoom(Number(event.target.value))
+                      }
+                      style={{ width: "100%", accentColor: COLORS.pink }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={labelStyle}>
+                      Tamaño de la X: {xSize}%
+                    </label>
+                    <input
+                      type="range"
+                      min="35"
+                      max="95"
+                      value={xSize}
+                      onChange={(event) =>
+                        setXSize(Number(event.target.value))
+                      }
+                      style={{
+                        width: "100%",
+                        accentColor: COLORS.charcoal,
+                      }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={labelStyle}>Color de la X</label>
+                    <input
+                      type="color"
+                      value={xColor}
+                      onChange={(event) => setXColor(event.target.value)}
+                      style={{
+                        width: "100%",
+                        height: "38px",
+                        border: `1px solid ${COLORS.border}`,
+                        borderRadius: "9px",
+                        background: COLORS.white,
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: "8px",
+                    marginTop: "16px",
+                    alignItems: "center",
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setTool("mark")}
+                    style={buttonStyle(tool === "mark")}
+                  >
+                    Marcar X
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setTool("erase")}
+                    style={buttonStyle(tool === "erase")}
+                  >
+                    Borrar X
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowGrid((value) => !value)}
+                    style={buttonStyle(showGrid)}
+                  >
+                    {showGrid ? "Ocultar cuadrícula" : "Mostrar cuadrícula"}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setMarks(new Set())}
+                    style={buttonStyle()}
+                  >
+                    Borrar todas
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={resetImage}
+                    style={buttonStyle()}
+                  >
+                    Cambiar imagen
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={downloadPattern}
+                    style={buttonStyle(false, true)}
+                  >
+                    Descargar patrón
+                  </button>
+                </div>
+
+                <div
+                  style={{
+                    marginTop: "13px",
+                    padding: "10px 12px",
+                    borderRadius: "10px",
+                    background:
+                      tool === "mark" ? COLORS.mint : COLORS.pink,
+                    fontSize: "13px",
+                    lineHeight: 1.5,
+                  }}
+                >
+                  {tool === "mark"
+                    ? "Tocá o arrastrá el dedo para agregar X."
+                    : "Tocá o arrastrá el dedo sobre las X para borrarlas."}
+                  <strong style={{ marginLeft: "8px" }}>
+                    {marks.size} {marks.size === 1 ? "marca" : "marcas"}
+                  </strong>
+                </div>
+              </section>
+
+              {processing ? (
+                <section
+                  style={{
+                    ...cardStyle,
+                    textAlign: "center",
+                    padding: "40px 20px",
+                  }}
+                >
+                  Preparando la cuadrícula…
+                </section>
+              ) : (
+                <section
+                  style={{
+                    ...cardStyle,
+                    overflow: "auto",
+                    WebkitOverflowScrolling: "touch",
+                  }}
+                >
+                  <canvas
+                    ref={canvasRef}
+                    onPointerDown={startDrawing}
+                    onPointerMove={continueDrawing}
+                    onPointerUp={stopDrawing}
+                    onPointerCancel={stopDrawing}
+                    onPointerLeave={stopDrawing}
+                    style={{
+                      display: "block",
+                      imageRendering: "pixelated",
+                      touchAction: "none",
+                      cursor:
+                        tool === "mark" ? "crosshair" : "not-allowed",
+                      maxWidth: "none",
+                    }}
+                  />
+                </section>
+              )}
+            </>
+          )}
+
+          <canvas ref={processingCanvasRef} hidden />
+        </div>
+      </main>
+    </AuthGuard>
+  );
+        }

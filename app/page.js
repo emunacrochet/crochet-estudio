@@ -46,12 +46,6 @@ export default function Home() {
         "Diseñá patrones con símbolos crochet.",
       link: "/cuadricula-crochet",
     },
-    {
-  titulo: "Patrones Mosaicos",
-  descripcion:
-    "Marcá con X los puntos de tu patrón mosaico.",
-  enlace: "/patrones-mosaicos",
-},
   ];
 
   return (

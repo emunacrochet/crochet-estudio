@@ -217,7 +217,8 @@ const offsetStartRef = useRef({ x: 0, y: 0 });
     const context = canvas.getContext("2d");
 
     context.clearRect(0, 0, canvas.width, canvas.height);
-
+context.save();
+context.translate(offsetX, offsetY);
     if (mode === "common" && processedGrid.length) {
       for (let row = 0; row < rows; row += 1) {
         for (let column = 0; column < columns; column += 1) {
@@ -239,12 +240,12 @@ const offsetStartRef = useRef({ x: 0, y: 0 });
       }
     } else {
       context.imageSmoothingEnabled = false;
-      context.drawImage(
-        image,
-        offsetX,
-        offsetY,
-        columns * zoom,
-        rows * zoom
+        context.drawImage(
+  image,
+  0,
+  0,
+  columns * zoom,
+  rows * zoom
       );
     }
 
@@ -289,7 +290,8 @@ const offsetStartRef = useRef({ x: 0, y: 0 });
       context.moveTo(x + size, y);
       context.lineTo(x, y + size);
       context.stroke();
-    });
+      });
+      context.restore();
   }, [
     imageSrc,
     rows,
@@ -344,8 +346,8 @@ const offsetStartRef = useRef({ x: 0, y: 0 });
     const x = (clientX - rectangle.left) * scaleX;
     const y = (clientY - rectangle.top) * scaleY;
 
-    const column = Math.floor(x / zoom);
-    const row = Math.floor(y / zoom);
+    const column = Math.floor((x - offsetX) / zoom);
+    const row = Math.floor((y - offsetY) / zoom);
 
     if (
       column < 0 ||

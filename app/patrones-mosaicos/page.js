@@ -786,6 +786,13 @@ const stopDrawing = () => {
                   }}
                 >
                   <button
+  type="button"
+  onClick={() => setTool("move")}
+  style={buttonStyle(tool === "move")}
+>
+  Mover imagen
+</button>
+                  <button
                     type="button"
                     onClick={() => setTool("mark")}
                     style={buttonStyle(tool === "mark")}

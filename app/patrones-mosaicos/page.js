@@ -94,10 +94,14 @@ export default function PatronesMosaicos() {
   const [rows, setRows] = useState(0);
   const [numberOfColors, setNumberOfColors] = useState(5);
   const [zoom, setZoom] = useState(18);
-  const [xSize, setXSize] = useState(70);
+  const [xSize, setXSize] = useState(45);
   const [xColor, setXColor] = useState("#3F3F3F");
   const [showGrid, setShowGrid] = useState(true);
   const [tool, setTool] = useState("move");
+  const [offsetX, setOffsetX] = useState(0);
+const [offsetY, setOffsetY] = useState(0);
+const dragStartRef = useRef(null);
+const offsetStartRef = useRef({ x: 0, y: 0 });
   const [marks, setMarks] = useState(new Set());
   const [isDrawing, setIsDrawing] = useState(false);
   const [processedGrid, setProcessedGrid] = useState([]);
@@ -237,8 +241,8 @@ export default function PatronesMosaicos() {
       context.imageSmoothingEnabled = false;
       context.drawImage(
         image,
-        0,
-        0,
+        offsetX,
+        offsetY,
         columns * zoom,
         rows * zoom
       );
@@ -266,7 +270,7 @@ export default function PatronesMosaicos() {
     const padding = zoom * (1 - xSize / 100) / 2;
 
     context.strokeStyle = xColor;
-    context.lineWidth = Math.max(1.5, zoom * 0.13);
+    context.lineWidth = Math.max(1, zoom * 0.06);
     context.lineCap = "round";
 
     marks.forEach((key) => {
@@ -298,6 +302,8 @@ export default function PatronesMosaicos() {
     marks,
     xColor,
     xSize,
+    offsetX,
+   offsetY,
   ]);
 
   const uploadImage = (file) => {
@@ -374,18 +380,69 @@ export default function PatronesMosaicos() {
   };
 
    const startDrawing = (event) => {
-  if (tool === "move") return;
-
   event.preventDefault();
+
+  if (tool === "move") {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const rectangle = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rectangle.width;
+    const scaleY = canvas.height / rectangle.height;
+
+    dragStartRef.current = {
+      x: (event.clientX - rectangle.left) * scaleX,
+      y: (event.clientY - rectangle.top) * scaleY,
+    };
+
+    offsetStartRef.current = {
+      x: offsetX,
+      y: offsetY,
+    };
+
+    return;
+  }
+
+  setIsDrawing(true);
   applyTool(event);
 };
 
-  const continueDrawing = () => {};
+const continueDrawing = (event) => {
+  event.preventDefault();
 
-  const stopDrawing = () => {
-    setIsDrawing(false);
-    lastCellRef.current = null;
-  };
+  if (tool === "move") {
+    if (!dragStartRef.current) return;
+
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const rectangle = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rectangle.width;
+    const scaleY = canvas.height / rectangle.height;
+
+    const currentX = (event.clientX - rectangle.left) * scaleX;
+    const currentY = (event.clientY - rectangle.top) * scaleY;
+
+    setOffsetX(
+      offsetStartRef.current.x + currentX - dragStartRef.current.x
+    );
+    setOffsetY(
+      offsetStartRef.current.y + currentY - dragStartRef.current.y
+    );
+
+    return;
+  }
+
+  if (isDrawing) {
+    applyTool(event);
+  }
+};
+
+const stopDrawing = () => {
+  setIsDrawing(false);
+  lastCellRef.current = null;
+  dragStartRef.current = null;
+};
 
   const downloadPattern = () => {
     const canvas = canvasRef.current;
@@ -825,7 +882,7 @@ export default function PatronesMosaicos() {
                     style={{
                       display: "block",
                       imageRendering: "pixelated",
-                      touchAction: tool === "move" ? "pan-x pan-y" : "none",
+                      touchAction: "none",
                       cursor:
                         tool === "mark" ? "crosshair" : "not-allowed",
                       maxWidth: "none",

@@ -587,7 +587,7 @@ export default function PatronesMosaicos() {
           background: COLORS.cream,
           color: COLORS.charcoal,
           fontFamily: "Arial, sans-serif",
-          padding: "22px 14px 50px",
+          padding: "380px 14px 50px",
         }}
       >
         <div

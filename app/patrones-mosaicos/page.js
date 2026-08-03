@@ -328,23 +328,21 @@ context.translate(offsetX, offsetY);
 
     const rectangle = canvas.getBoundingClientRect();
 
-    const clientX =
-      event.clientX ??
-      event.touches?.[0]?.clientX ??
-      event.changedTouches?.[0]?.clientX;
+const scaleX = canvas.width / rectangle.width;
+const scaleY = canvas.height / rectangle.height;
 
-    const clientY =
-      event.clientY ??
-      event.touches?.[0]?.clientY ??
-      event.changedTouches?.[0]?.clientY;
+const nativeEvent = event.nativeEvent ?? event;
 
-    if (clientX === undefined || clientY === undefined) return null;
+const pointerX =
+  nativeEvent.offsetX ??
+  event.clientX - rectangle.left;
 
-    const scaleX = canvas.width / rectangle.width;
-    const scaleY = canvas.height / rectangle.height;
+const pointerY =
+  nativeEvent.offsetY ??
+  event.clientY - rectangle.top;
 
-    const x = (clientX - rectangle.left) * scaleX;
-    const y = (clientY - rectangle.top) * scaleY;
+const x = pointerX * scaleX;
+const y = pointerY * scaleY;
 
     const column = Math.floor((x - offsetX) / zoom);
     const row = Math.floor((y - offsetY) / zoom);

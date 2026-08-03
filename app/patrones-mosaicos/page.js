@@ -1982,7 +1982,8 @@ export default function PatronesMosaicos() {
                       </div>
                     </div>
                   </div>
-                </section>
+             </section>
+              )}
             </>
           )}
 

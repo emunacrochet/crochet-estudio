@@ -268,29 +268,7 @@ context.translate(offsetX, offsetY);
       }
     }
 
-    const padding = zoom * (1 - xSize / 100) / 2;
-
-    context.strokeStyle = xColor;
-    context.lineWidth = Math.max(1, zoom * 0.06);
-    context.lineCap = "round";
-
-    marks.forEach((key) => {
-      const [row, column] = key.split("-").map(Number);
-
-      const x = column * zoom + padding;
-      const y = row * zoom + padding;
-      const size = zoom - padding * 2;
-
-      context.beginPath();
-      context.moveTo(x, y);
-      context.lineTo(x + size, y + size);
-      context.stroke();
-
-      context.beginPath();
-      context.moveTo(x + size, y);
-      context.lineTo(x, y + size);
-      context.stroke();
-      });
+  
       context.restore();
   }, [
     imageSrc,
@@ -879,22 +857,93 @@ const stopDrawing = () => {
                     WebkitOverflowScrolling: "touch",
                   }}
                 >
-                  <canvas
-                    ref={canvasRef}
-                    onPointerDown={startDrawing}
-                    onPointerMove={continueDrawing}
-                    onPointerUp={stopDrawing}
-                    onPointerCancel={stopDrawing}
-                    onPointerLeave={stopDrawing}
-                    style={{
-                      display: "block",
-                      imageRendering: "pixelated",
-                      touchAction: "none",
-                      cursor:
-                        tool === "mark" ? "crosshair" : "not-allowed",
-                      maxWidth: "none",
-                    }}
-                  />
+                  <div
+  style={{
+    position: "relative",
+    width: `${columns * zoom}px`,
+    height: `${rows * zoom}px`,
+  }}
+>
+  <canvas
+    ref={canvasRef}
+    onPointerDown={startDrawing}
+    onPointerMove={continueDrawing}
+    onPointerUp={stopDrawing}
+    onPointerCancel={stopDrawing}
+    onPointerLeave={stopDrawing}
+    style={{
+      display: "block",
+      imageRendering: "pixelated",
+      touchAction: "none",
+      cursor: tool === "move" ? "grab" : "default",
+      maxWidth: "none",
+    }}
+  />
+
+  <div
+    style={{
+      position: "absolute",
+      left: `${offsetX}px`,
+      top: `${offsetY}px`,
+      display: "grid",
+      gridTemplateColumns: `repeat(${columns}, ${zoom}px)`,
+      gridTemplateRows: `repeat(${rows}, ${zoom}px)`,
+      width: `${columns * zoom}px`,
+      height: `${rows * zoom}px`,
+      pointerEvents: tool === "move" ? "none" : "auto",
+      touchAction: "none",
+    }}
+  >
+    {Array.from({ length: rows }).map((_, row) =>
+      Array.from({ length: columns }).map((_, column) => {
+        const key = `${row}-${column}`;
+        const marked = marks.has(key);
+
+        return (
+          <button
+            key={key}
+            type="button"
+            onPointerDown={(event) => {
+              event.preventDefault();
+
+              setMarks((previousMarks) => {
+                const updatedMarks = new Set(previousMarks);
+
+                if (tool === "mark") {
+                  updatedMarks.add(key);
+                }
+
+                if (tool === "erase") {
+                  updatedMarks.delete(key);
+                }
+
+                return updatedMarks;
+              });
+            }}
+            style={{
+              width: `${zoom}px`,
+              height: `${zoom}px`,
+              padding: 0,
+              margin: 0,
+              border: "none",
+              background: "transparent",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: xColor,
+              fontSize: `${Math.max(8, zoom * (xSize / 100))}px`,
+              lineHeight: 1,
+              fontFamily: "Arial, sans-serif",
+              cursor: "crosshair",
+            }}
+          >
+            {marked ? "×" : ""}
+          </button>
+        );
+      })
+    )}
+  </div>
+</div>
                 </section>
               )}
             </>

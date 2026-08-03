@@ -908,7 +908,9 @@ touchAction: "none",
 
               setMarks((previousMarks) => {
                 const updatedMarks = new Set(previousMarks);
-                
+                if (tool === "mark") {
+                updatedMarks.add(key);
+                }
 
                 if (tool === "erase") {
                   updatedMarks.delete(key);

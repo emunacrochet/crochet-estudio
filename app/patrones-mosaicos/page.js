@@ -787,7 +787,16 @@ export default function PatronesMosaicos() {
             </section>
           ) : (
             <>
-              <section style={cardStyle}>
+              <section
+  style={{
+    ...cardStyle,
+    position: "sticky",
+    top: "10px",
+    zIndex: 900,
+    maxHeight: "42vh",
+    overflowY: "auto",
+  }}
+>
                 <div
                   style={{
                     display: "grid",

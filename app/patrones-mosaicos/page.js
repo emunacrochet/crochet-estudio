@@ -592,7 +592,7 @@ const handleBoardPointerMove = (
   }
 
   gesture.last = key;
-};/
+};
   const handleBoardPointerEnd = (
     event
   ) => {

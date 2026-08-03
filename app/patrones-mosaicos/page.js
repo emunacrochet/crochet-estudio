@@ -13,7 +13,6 @@ const COLORS = {
   muted: "#746F6A",
   border: "#DED8D1",
 };
-
 const NUMBER_GUTTER = 34;
 const TOP_GUTTER = 28;
 const MIN_ZOOM = 8;

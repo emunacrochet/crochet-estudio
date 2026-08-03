@@ -406,35 +406,15 @@ export default function PatronesMosaicos() {
     return;
   }
 
-  if (tool === "erase") {
-    removeMark(key);
+    if (tool === "erase") {
+  removeMark(key);
+  gestureRef.current = null;
+  return;
+}
 
-    gestureRef.current = {
-      type: "erase",
-      last: key,
-    };
-
-    return;
-  }
-
-  if (marks.has(key)) {
-    gestureRef.current = {
-      type: "move-mark",
-      source: key,
-      destination: key,
-    };
-
-    return;
-  }
-
-  addMark(key);
-
-  gestureRef.current = {
-    type: "paint",
-    last: key,
-  };
-    
-  };
+addMark(key);
+gestureRef.current = null;
+};
 const handleBoardPointerMove = (
   event
 ) => {

@@ -103,6 +103,7 @@ const [offsetY, setOffsetY] = useState(0);
 const dragStartRef = useRef(null);
 const offsetStartRef = useRef({ x: 0, y: 0 });
   const [marks, setMarks] = useState(new Set());
+  const [draggedMark, setDraggedMark] = useState(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [processedGrid, setProcessedGrid] = useState([]);
   const [palette, setPalette] = useState([]);
@@ -902,23 +903,46 @@ touchAction: "none",
         return (
           <button
             key={key}
-            type="button"
             onPointerDown={(event) => {
-              event.preventDefault();
+  event.preventDefault();
 
-              setMarks((previousMarks) => {
-                const updatedMarks = new Set(previousMarks);
-                if (tool === "mark") {
-                updatedMarks.add(key);
-                }
+  if (tool === "mark" && marked) {
+    setDraggedMark(key);
+    return;
+  }
 
-                if (tool === "erase") {
-                  updatedMarks.delete(key);
-                }
+  setMarks((previousMarks) => {
+    const updatedMarks = new Set(previousMarks);
 
-                return updatedMarks;
-              });
-            }}
+    if (tool === "mark") {
+      updatedMarks.add(key);
+    }
+
+    if (tool === "erase") {
+      updatedMarks.delete(key);
+    }
+
+    return updatedMarks;
+  });
+}}
+onPointerEnter={() => {
+  if (!draggedMark || tool !== "mark" || draggedMark === key) return;
+
+  setMarks((previousMarks) => {
+    const updatedMarks = new Set(previousMarks);
+    updatedMarks.delete(draggedMark);
+    updatedMarks.add(key);
+    return updatedMarks;
+  });
+
+  setDraggedMark(key);
+}}
+onPointerUp={() => {
+  setDraggedMark(null);
+}}
+onPointerCancel={() => {
+  setDraggedMark(null);
+}}
             style={{
               width: "100%",
               height: "100%",

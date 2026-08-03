@@ -14,6 +14,9 @@ const COLORS = {
   border: "#DED8D1",
 };
 
+const NUMBER_GUTTER = 34;
+const TOP_GUTTER = 28;
+
 const distance = (a, b) =>
   Math.sqrt(
     (a.r - b.r) ** 2 +
@@ -94,26 +97,33 @@ export default function PatronesMosaicos() {
   const [rows, setRows] = useState(0);
   const [numberOfColors, setNumberOfColors] = useState(5);
   const [zoom, setZoom] = useState(18);
-  const [xSize, setXSize] = useState(45);
+  const [xSize, setXSize] = useState(62);
   const [xColor, setXColor] = useState("#3F3F3F");
   const [showGrid, setShowGrid] = useState(true);
-  const [tool, setTool] = useState("move");
-  const [offsetX, setOffsetX] = useState(0);
-const [offsetY, setOffsetY] = useState(0);
-const dragStartRef = useRef(null);
-const offsetStartRef = useRef({ x: 0, y: 0 });
+
+  const [tool, setTool] = useState("mark");
   const [marks, setMarks] = useState(new Set());
-  const [draggedMark, setDraggedMark] = useState(null);
-  const [isDrawing, setIsDrawing] = useState(false);
+  const [selectedMark, setSelectedMark] = useState(null);
+  const [pointerDown, setPointerDown] = useState(false);
+
   const [processedGrid, setProcessedGrid] = useState([]);
   const [palette, setPalette] = useState([]);
   const [processing, setProcessing] = useState(false);
+
+  const [referenceOpen, setReferenceOpen] = useState(true);
+  const [referenceMinimized, setReferenceMinimized] = useState(false);
+  const [referencePosition, setReferencePosition] = useState({
+    x: 18,
+    y: 90,
+  });
 
   const fileRef = useRef(null);
   const canvasRef = useRef(null);
   const processingCanvasRef = useRef(null);
   const imageRef = useRef(null);
-  const lastCellRef = useRef(null);
+
+  const referenceDragRef = useRef(null);
+  const referenceStartRef = useRef({ x: 0, y: 0 });
 
   const calculateRows = useCallback(
     (image) => {
@@ -148,6 +158,11 @@ const offsetStartRef = useRef({ x: 0, y: 0 });
       setProcessing(true);
 
       const hiddenCanvas = processingCanvasRef.current;
+      if (!hiddenCanvas) {
+        setProcessing(false);
+        return;
+      }
+
       const context = hiddenCanvas.getContext("2d", {
         willReadFrequently: true,
       });
@@ -204,6 +219,7 @@ const offsetStartRef = useRef({ x: 0, y: 0 });
 
   useEffect(() => {
     setMarks(new Set());
+    setSelectedMark(null);
   }, [imageSrc, columns, mode]);
 
   useEffect(() => {
@@ -218,8 +234,8 @@ const offsetStartRef = useRef({ x: 0, y: 0 });
     const context = canvas.getContext("2d");
 
     context.clearRect(0, 0, canvas.width, canvas.height);
-context.save();
-context.translate(offsetX, offsetY);
+    context.imageSmoothingEnabled = false;
+
     if (mode === "common" && processedGrid.length) {
       for (let row = 0; row < rows; row += 1) {
         for (let column = 0; column < columns; column += 1) {
@@ -240,18 +256,17 @@ context.translate(offsetX, offsetY);
         }
       }
     } else {
-      context.imageSmoothingEnabled = false;
-        context.drawImage(
-  image,
-  0,
-  0,
-  columns * zoom,
-  rows * zoom
+      context.drawImage(
+        image,
+        0,
+        0,
+        columns * zoom,
+        rows * zoom
       );
     }
 
     if (showGrid) {
-      context.strokeStyle = "rgba(63, 63, 63, 0.30)";
+      context.strokeStyle = "rgba(63, 63, 63, 0.32)";
       context.lineWidth = 1;
 
       for (let row = 0; row <= rows; row += 1) {
@@ -268,9 +283,6 @@ context.translate(offsetX, offsetY);
         context.stroke();
       }
     }
-
-  
-      context.restore();
   }, [
     imageSrc,
     rows,
@@ -280,12 +292,19 @@ context.translate(offsetX, offsetY);
     processedGrid,
     palette,
     showGrid,
-    marks,
-    xColor,
-    xSize,
-    offsetX,
-   offsetY,
   ]);
+
+  useEffect(() => {
+    const stopPointer = () => setPointerDown(false);
+
+    window.addEventListener("pointerup", stopPointer);
+    window.addEventListener("pointercancel", stopPointer);
+
+    return () => {
+      window.removeEventListener("pointerup", stopPointer);
+      window.removeEventListener("pointercancel", stopPointer);
+    };
+  }, []);
 
   const uploadImage = (file) => {
     if (!file || !file.type.startsWith("image/")) return;
@@ -295,150 +314,214 @@ context.translate(offsetX, offsetY);
     reader.onload = (event) => {
       setImageSrc(event.target.result);
       setMarks(new Set());
+      setSelectedMark(null);
+      setReferenceOpen(true);
+      setReferenceMinimized(false);
     };
 
     reader.readAsDataURL(file);
   };
 
-  const getCell = (event) => {
-    const canvas = canvasRef.current;
+  const applyCellTool = (key, marked) => {
+    if (tool === "mark") {
+      setMarks((previousMarks) => {
+        const updatedMarks = new Set(previousMarks);
+        updatedMarks.add(key);
+        return updatedMarks;
+      });
 
-    if (!canvas) return null;
-
-    const rectangle = canvas.getBoundingClientRect();
-
-const scaleX = canvas.width / rectangle.width;
-const scaleY = canvas.height / rectangle.height;
-
-const nativeEvent = event.nativeEvent ?? event;
-
-const pointerX =
-  nativeEvent.offsetX ??
-  event.clientX - rectangle.left;
-
-const pointerY =
-  nativeEvent.offsetY ??
-  event.clientY - rectangle.top;
-
-const x = pointerX * scaleX;
-const y = pointerY * scaleY;
-
-    const column = Math.floor((x - offsetX) / zoom);
-    const row = Math.floor((y - offsetY) / zoom);
-
-    if (
-      column < 0 ||
-      column >= columns ||
-      row < 0 ||
-      row >= rows
-    ) {
-      return null;
+      return;
     }
 
-    return `${row}-${column}`;
-  };
+    if (tool === "erase") {
+      setMarks((previousMarks) => {
+        const updatedMarks = new Set(previousMarks);
+        updatedMarks.delete(key);
+        return updatedMarks;
+      });
 
-  const applyTool = (event) => {
-    const cell = getCell(event);
-
-    if (!cell || cell === lastCellRef.current) return;
-
-    lastCellRef.current = cell;
-
-    setMarks((previousMarks) => {
-      const updatedMarks = new Set(previousMarks);
-
-      if (tool === "mark") {
-        updatedMarks.add(cell);
-      } else {
-        updatedMarks.delete(cell);
+      if (selectedMark === key) {
+        setSelectedMark(null);
       }
 
-      return updatedMarks;
+      return;
+    }
+
+    if (tool === "move-x") {
+      if (!selectedMark) {
+        if (marked) {
+          setSelectedMark(key);
+        }
+
+        return;
+      }
+
+      if (selectedMark === key) {
+        setSelectedMark(null);
+        return;
+      }
+
+      setMarks((previousMarks) => {
+        const updatedMarks = new Set(previousMarks);
+        updatedMarks.delete(selectedMark);
+        updatedMarks.add(key);
+        return updatedMarks;
+      });
+
+      setSelectedMark(null);
+    }
+  };
+
+  const handleCellPointerDown = (event, key, marked) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    setPointerDown(true);
+    applyCellTool(key, marked);
+  };
+
+  const handleCellPointerEnter = (key, marked) => {
+    if (!pointerDown) return;
+
+    if (tool === "mark" || tool === "erase") {
+      applyCellTool(key, marked);
+    }
+  };
+
+  const startReferenceDrag = (event) => {
+    if (event.target.closest("button")) return;
+
+    event.preventDefault();
+
+    referenceDragRef.current = {
+      x: event.clientX,
+      y: event.clientY,
+    };
+
+    referenceStartRef.current = {
+      ...referencePosition,
+    };
+
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+  };
+
+  const continueReferenceDrag = (event) => {
+    if (!referenceDragRef.current) return;
+
+    const differenceX =
+      event.clientX - referenceDragRef.current.x;
+
+    const differenceY =
+      event.clientY - referenceDragRef.current.y;
+
+    setReferencePosition({
+      x: Math.max(
+        0,
+        referenceStartRef.current.x + differenceX
+      ),
+      y: Math.max(
+        0,
+        referenceStartRef.current.y + differenceY
+      ),
     });
   };
 
-   const startDrawing = (event) => {
-  event.preventDefault();
-
-  if (tool === "move") {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const rectangle = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rectangle.width;
-    const scaleY = canvas.height / rectangle.height;
-
-    dragStartRef.current = {
-      x: (event.clientX - rectangle.left) * scaleX,
-      y: (event.clientY - rectangle.top) * scaleY,
-    };
-
-    offsetStartRef.current = {
-      x: offsetX,
-      y: offsetY,
-    };
-
-    return;
-  }
-
-  setIsDrawing(true);
-  applyTool(event);
-};
-
-const continueDrawing = (event) => {
-  event.preventDefault();
-
-  if (tool === "move") {
-    if (!dragStartRef.current) return;
-
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const rectangle = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rectangle.width;
-    const scaleY = canvas.height / rectangle.height;
-
-    const currentX = (event.clientX - rectangle.left) * scaleX;
-    const currentY = (event.clientY - rectangle.top) * scaleY;
-
-    setOffsetX(
-      offsetStartRef.current.x + currentX - dragStartRef.current.x
-    );
-    setOffsetY(
-      offsetStartRef.current.y + currentY - dragStartRef.current.y
-    );
-
-    return;
-  }
-
-  if (isDrawing) {
-    applyTool(event);
-  }
-};
-
-const stopDrawing = () => {
-  setIsDrawing(false);
-  lastCellRef.current = null;
-  dragStartRef.current = null;
-};
+  const stopReferenceDrag = () => {
+    referenceDragRef.current = null;
+  };
 
   const downloadPattern = () => {
-    const canvas = canvasRef.current;
+    const sourceCanvas = canvasRef.current;
 
-    if (!canvas) return;
+    if (!sourceCanvas || !rows) return;
+
+    const exportCanvas = document.createElement("canvas");
+    const exportContext = exportCanvas.getContext("2d");
+
+    exportCanvas.width =
+      NUMBER_GUTTER + columns * zoom + 2;
+
+    exportCanvas.height =
+      TOP_GUTTER + rows * zoom + 2;
+
+    exportContext.fillStyle = COLORS.white;
+    exportContext.fillRect(
+      0,
+      0,
+      exportCanvas.width,
+      exportCanvas.height
+    );
+
+    exportContext.drawImage(
+      sourceCanvas,
+      NUMBER_GUTTER,
+      TOP_GUTTER
+    );
+
+    exportContext.font =
+      `${Math.max(9, Math.min(13, zoom * 0.55))}px Arial`;
+
+    exportContext.fillStyle = COLORS.charcoal;
+    exportContext.textAlign = "center";
+    exportContext.textBaseline = "middle";
+
+    for (let column = 0; column < columns; column += 1) {
+      exportContext.fillText(
+        String(column + 1),
+        NUMBER_GUTTER + column * zoom + zoom / 2,
+        TOP_GUTTER / 2
+      );
+    }
+
+    for (let row = 0; row < rows; row += 1) {
+      exportContext.fillText(
+        String(row + 1),
+        NUMBER_GUTTER / 2,
+        TOP_GUTTER + row * zoom + zoom / 2
+      );
+    }
+
+    exportContext.strokeStyle = COLORS.border;
+    exportContext.strokeRect(
+      NUMBER_GUTTER,
+      TOP_GUTTER,
+      columns * zoom,
+      rows * zoom
+    );
+
+    exportContext.fillStyle = xColor;
+    exportContext.font =
+      `bold ${Math.max(8, zoom * (xSize / 100))}px Arial`;
+
+    exportContext.textAlign = "center";
+    exportContext.textBaseline = "middle";
+
+    marks.forEach((key) => {
+      const [row, column] = key
+        .split("-")
+        .map(Number);
+
+      exportContext.fillText(
+        "×",
+        NUMBER_GUTTER + column * zoom + zoom / 2,
+        TOP_GUTTER + row * zoom + zoom / 2 + 1
+      );
+    });
 
     const link = document.createElement("a");
     link.download = "patron-mosaico-emuna.png";
-    link.href = canvas.toDataURL("image/png");
+    link.href = exportCanvas.toDataURL("image/png");
     link.click();
   };
 
   const resetImage = () => {
     setImageSrc("");
     setMarks(new Set());
+    setSelectedMark(null);
     setProcessedGrid([]);
     setPalette([]);
+    setRows(0);
+    setReferenceOpen(false);
     imageRef.current = null;
 
     if (fileRef.current) {
@@ -446,10 +529,14 @@ const stopDrawing = () => {
     }
   };
 
-  const buttonStyle = (active = false, primary = false) => ({
-    border: active || primary
-      ? "1px solid transparent"
-      : `1px solid ${COLORS.border}`,
+  const buttonStyle = (
+    active = false,
+    primary = false
+  ) => ({
+    border:
+      active || primary
+        ? "1px solid transparent"
+        : `1px solid ${COLORS.border}`,
     background: active
       ? COLORS.charcoal
       : primary
@@ -461,6 +548,7 @@ const stopDrawing = () => {
     fontSize: "13px",
     fontWeight: "600",
     cursor: "pointer",
+    touchAction: "manipulation",
   });
 
   const cardStyle = {
@@ -469,7 +557,8 @@ const stopDrawing = () => {
     borderRadius: "16px",
     padding: "16px",
     marginBottom: "14px",
-    boxShadow: "0 3px 12px rgba(63, 63, 63, 0.06)",
+    boxShadow:
+      "0 3px 12px rgba(63, 63, 63, 0.06)",
   };
 
   const labelStyle = {
@@ -478,6 +567,16 @@ const stopDrawing = () => {
     fontWeight: "600",
     color: COLORS.muted,
     marginBottom: "6px",
+  };
+
+  const instructionText = {
+    mark: "Tocá una celda para colocar una X. También podés arrastrar para marcar varias.",
+    erase:
+      "Tocá una X para borrarla. También podés arrastrar para borrar varias.",
+    "move-x": selectedMark
+      ? "Ahora tocá la celda donde querés colocar la X seleccionada."
+      : "Tocá una X para seleccionarla y después tocá su nueva celda.",
+    pan: "Deslizá el tablero para recorrer el patrón.",
   };
 
   return (
@@ -491,7 +590,12 @@ const stopDrawing = () => {
           padding: "22px 14px 50px",
         }}
       >
-        <div style={{ maxWidth: "1050px", margin: "0 auto" }}>
+        <div
+          style={{
+            maxWidth: "1050px",
+            margin: "0 auto",
+          }}
+        >
           <header style={{ marginBottom: "22px" }}>
             <h1
               style={{
@@ -510,8 +614,9 @@ const stopDrawing = () => {
                 lineHeight: 1.6,
               }}
             >
-              Subí tu imagen y marcá con una X los puntos que
-              correspondan. Las marcas permanecen en su lugar aunque
+              Subí tu imagen y marcá manualmente con
+              una X los puntos que correspondan. Las
+              marcas permanecen en su celda aunque
               cambies el zoom.
             </p>
           </header>
@@ -545,7 +650,12 @@ const stopDrawing = () => {
                   textAlign: "left",
                 }}
               >
-                <strong style={{ display: "block", marginBottom: "5px" }}>
+                <strong
+                  style={{
+                    display: "block",
+                    marginBottom: "5px",
+                  }}
+                >
                   Imagen común
                 </strong>
 
@@ -557,8 +667,9 @@ const stopDrawing = () => {
                     opacity: 0.9,
                   }}
                 >
-                  Emuná convierte la imagen en una cuadrícula y reduce
-                  la cantidad de colores.
+                  Emuná convierte la imagen en una
+                  cuadrícula y reduce la cantidad de
+                  colores.
                 </span>
               </button>
 
@@ -566,12 +677,19 @@ const stopDrawing = () => {
                 type="button"
                 onClick={() => setMode("pixelated")}
                 style={{
-                  ...buttonStyle(mode === "pixelated"),
+                  ...buttonStyle(
+                    mode === "pixelated"
+                  ),
                   padding: "16px",
                   textAlign: "left",
                 }}
               >
-                <strong style={{ display: "block", marginBottom: "5px" }}>
+                <strong
+                  style={{
+                    display: "block",
+                    marginBottom: "5px",
+                  }}
+                >
                   Patrón ya pixelado
                 </strong>
 
@@ -583,8 +701,8 @@ const stopDrawing = () => {
                     opacity: 0.9,
                   }}
                 >
-                  Conserva la imagen y coloca la cuadrícula y las X por
-                  encima.
+                  Conserva la imagen y coloca la
+                  cuadrícula y las X por encima.
                 </span>
               </button>
             </div>
@@ -592,11 +710,18 @@ const stopDrawing = () => {
 
           {!imageSrc ? (
             <section
-              onClick={() => fileRef.current?.click()}
-              onDragOver={(event) => event.preventDefault()}
+              onClick={() =>
+                fileRef.current?.click()
+              }
+              onDragOver={(event) =>
+                event.preventDefault()
+              }
               onDrop={(event) => {
                 event.preventDefault();
-                uploadImage(event.dataTransfer.files?.[0]);
+
+                uploadImage(
+                  event.dataTransfer.files?.[0]
+                );
               }}
               style={{
                 ...cardStyle,
@@ -644,7 +769,8 @@ const stopDrawing = () => {
                   lineHeight: 1.6,
                 }}
               >
-                Tocá aquí para elegirla desde tu galería.
+                Tocá aquí para elegirla desde tu
+                galería.
               </div>
 
               <input
@@ -653,7 +779,9 @@ const stopDrawing = () => {
                 accept="image/*"
                 hidden
                 onChange={(event) =>
-                  uploadImage(event.target.files?.[0])
+                  uploadImage(
+                    event.target.files?.[0]
+                  )
                 }
               />
             </section>
@@ -672,15 +800,21 @@ const stopDrawing = () => {
                     <label style={labelStyle}>
                       Columnas: {columns}
                     </label>
+
                     <input
                       type="range"
                       min="8"
                       max="100"
                       value={columns}
                       onChange={(event) =>
-                        setColumns(Number(event.target.value))
+                        setColumns(
+                          Number(event.target.value)
+                        )
                       }
-                      style={{ width: "100%", accentColor: COLORS.lilac }}
+                      style={{
+                        width: "100%",
+                        accentColor: COLORS.lilac,
+                      }}
                     />
                   </div>
 
@@ -689,13 +823,18 @@ const stopDrawing = () => {
                       <label style={labelStyle}>
                         Colores: {numberOfColors}
                       </label>
+
                       <input
                         type="range"
                         min="2"
                         max="12"
                         value={numberOfColors}
                         onChange={(event) =>
-                          setNumberOfColors(Number(event.target.value))
+                          setNumberOfColors(
+                            Number(
+                              event.target.value
+                            )
+                          )
                         }
                         style={{
                           width: "100%",
@@ -706,16 +845,24 @@ const stopDrawing = () => {
                   )}
 
                   <div>
-                    <label style={labelStyle}>Zoom: {zoom}</label>
+                    <label style={labelStyle}>
+                      Zoom: {zoom}
+                    </label>
+
                     <input
                       type="range"
                       min="8"
                       max="45"
                       value={zoom}
                       onChange={(event) =>
-                        setZoom(Number(event.target.value))
+                        setZoom(
+                          Number(event.target.value)
+                        )
                       }
-                      style={{ width: "100%", accentColor: COLORS.pink }}
+                      style={{
+                        width: "100%",
+                        accentColor: COLORS.pink,
+                      }}
                     />
                   </div>
 
@@ -723,27 +870,38 @@ const stopDrawing = () => {
                     <label style={labelStyle}>
                       Tamaño de la X: {xSize}%
                     </label>
+
                     <input
                       type="range"
                       min="35"
                       max="95"
                       value={xSize}
                       onChange={(event) =>
-                        setXSize(Number(event.target.value))
+                        setXSize(
+                          Number(event.target.value)
+                        )
                       }
                       style={{
                         width: "100%",
-                        accentColor: COLORS.charcoal,
+                        accentColor:
+                          COLORS.charcoal,
                       }}
                     />
                   </div>
 
                   <div>
-                    <label style={labelStyle}>Color de la X</label>
+                    <label style={labelStyle}>
+                      Color de la X
+                    </label>
+
                     <input
                       type="color"
                       value={xColor}
-                      onChange={(event) => setXColor(event.target.value)}
+                      onChange={(event) =>
+                        setXColor(
+                          event.target.value
+                        )
+                      }
                       style={{
                         width: "100%",
                         height: "38px",
@@ -765,42 +923,94 @@ const stopDrawing = () => {
                   }}
                 >
                   <button
-  type="button"
-  onClick={() => setTool("move")}
-  style={buttonStyle(tool === "move")}
->
-  Mover imagen
-</button>
+                    type="button"
+                    onClick={() => {
+                      setTool("pan");
+                      setSelectedMark(null);
+                    }}
+                    style={buttonStyle(
+                      tool === "pan"
+                    )}
+                  >
+                    Recorrer imagen
+                  </button>
+
                   <button
                     type="button"
-                    onClick={() => setTool("mark")}
-                    style={buttonStyle(tool === "mark")}
+                    onClick={() => {
+                      setTool("mark");
+                      setSelectedMark(null);
+                    }}
+                    style={buttonStyle(
+                      tool === "mark"
+                    )}
                   >
                     Marcar X
                   </button>
 
                   <button
                     type="button"
-                    onClick={() => setTool("erase")}
-                    style={buttonStyle(tool === "erase")}
+                    onClick={() => {
+                      setTool("move-x");
+                      setSelectedMark(null);
+                    }}
+                    style={buttonStyle(
+                      tool === "move-x"
+                    )}
+                  >
+                    Mover X
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTool("erase");
+                      setSelectedMark(null);
+                    }}
+                    style={buttonStyle(
+                      tool === "erase"
+                    )}
                   >
                     Borrar X
                   </button>
 
                   <button
                     type="button"
-                    onClick={() => setShowGrid((value) => !value)}
+                    onClick={() =>
+                      setShowGrid(
+                        (value) => !value
+                      )
+                    }
                     style={buttonStyle(showGrid)}
                   >
-                    {showGrid ? "Ocultar cuadrícula" : "Mostrar cuadrícula"}
+                    {showGrid
+                      ? "Ocultar cuadrícula"
+                      : "Mostrar cuadrícula"}
                   </button>
 
                   <button
                     type="button"
-                    onClick={() => setMarks(new Set())}
+                    onClick={() => {
+                      setMarks(new Set());
+                      setSelectedMark(null);
+                    }}
                     style={buttonStyle()}
                   >
                     Borrar todas
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setReferenceOpen(
+                        (value) => !value
+                      )
+                    }
+                    style={buttonStyle(
+                      referenceOpen
+                    )}
+                  >
+                    Referencia flotante
                   </button>
 
                   <button
@@ -826,16 +1036,24 @@ const stopDrawing = () => {
                     padding: "10px 12px",
                     borderRadius: "10px",
                     background:
-                      tool === "mark" ? COLORS.mint : COLORS.pink,
+                      tool === "erase"
+                        ? COLORS.pink
+                        : tool === "move-x"
+                          ? COLORS.lilac
+                          : COLORS.mint,
                     fontSize: "13px",
                     lineHeight: 1.5,
                   }}
                 >
-                  {tool === "mark"
-                    ? "Tocá o arrastrá el dedo para agregar X."
-                    : "Tocá o arrastrá el dedo sobre las X para borrarlas."}
-                  <strong style={{ marginLeft: "8px" }}>
-                    {marks.size} {marks.size === 1 ? "marca" : "marcas"}
+                  {instructionText[tool]}
+
+                  <strong
+                    style={{ marginLeft: "8px" }}
+                  >
+                    {marks.size}{" "}
+                    {marks.size === 1
+                      ? "marca"
+                      : "marcas"}
                   </strong>
                 </div>
               </section>
@@ -855,126 +1073,415 @@ const stopDrawing = () => {
                   style={{
                     ...cardStyle,
                     overflow: "auto",
-                    WebkitOverflowScrolling: "touch",
+                    WebkitOverflowScrolling:
+                      "touch",
+                    touchAction:
+                      tool === "pan"
+                        ? "pan-x pan-y"
+                        : "none",
                   }}
                 >
                   <div
-  style={{
-    position: "relative",
-    width: `${columns * zoom}px`,
-    height: `${rows * zoom}px`,
-  }}
->
-  <canvas
-    ref={canvasRef}
-    onPointerDown={startDrawing}
-    onPointerMove={continueDrawing}
-    onPointerUp={stopDrawing}
-    onPointerCancel={stopDrawing}
-    onPointerLeave={stopDrawing}
-    style={{
-      display: "block",
-      imageRendering: "pixelated",
-      touchAction: "none",
-      cursor: tool === "move" ? "grab" : "default",
-      maxWidth: "none",
-    }}
-  />
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: `${NUMBER_GUTTER}px ${columns * zoom}px`,
+                      gridTemplateRows: `${TOP_GUTTER}px ${rows * zoom}px`,
+                      width:
+                        NUMBER_GUTTER +
+                        columns * zoom,
+                      height:
+                        TOP_GUTTER +
+                        rows * zoom,
+                    }}
+                  >
+                    <div
+                      style={{
+                        gridColumn: 1,
+                        gridRow: 1,
+                        background: COLORS.white,
+                        borderRight: `1px solid ${COLORS.border}`,
+                        borderBottom: `1px solid ${COLORS.border}`,
+                      }}
+                    />
 
-  <div
-    style={{
-      position: "absolute",
-      left: `${offsetX}px`,
-      top: `${offsetY}px`,
-      display: "grid",
-gridTemplateColumns: `repeat(${columns}, 1fr)`,
-gridTemplateRows: `repeat(${rows}, 1fr)`,
-width: "100%",
-height: "100%",
-pointerEvents: tool === "move" ? "none" : "auto",
-touchAction: "none",
-}}
->
-{Array.from({ length: rows }).map((_, row) =>
-  Array.from({ length: columns }).map((_, column) => {
-    const key = `${row}-${column}`;
-    const marked = marks.has(key);
+                    <div
+                      style={{
+                        gridColumn: 2,
+                        gridRow: 1,
+                        display: "grid",
+                        gridTemplateColumns: `repeat(${columns}, ${zoom}px)`,
+                        height: `${TOP_GUTTER}px`,
+                        background: COLORS.white,
+                      }}
+                    >
+                      {Array.from({
+                        length: columns,
+                      }).map((_, column) => (
+                        <div
+                          key={`column-${column}`}
+                          style={{
+                            width: `${zoom}px`,
+                            height: `${TOP_GUTTER}px`,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            fontSize: `${Math.max(
+                              8,
+                              Math.min(
+                                12,
+                                zoom * 0.5
+                              )
+                            )}px`,
+                            color: COLORS.muted,
+                            borderRight: `1px solid ${COLORS.border}`,
+                            boxSizing:
+                              "border-box",
+                            userSelect: "none",
+                          }}
+                        >
+                          {column + 1}
+                        </div>
+                      ))}
+                    </div>
 
-        return (
-          <button
-            key={key}
-            onPointerDown={(event) => {
-  event.preventDefault();
+                    <div
+                      style={{
+                        gridColumn: 1,
+                        gridRow: 2,
+                        display: "grid",
+                        gridTemplateRows: `repeat(${rows}, ${zoom}px)`,
+                        width: `${NUMBER_GUTTER}px`,
+                        background: COLORS.white,
+                      }}
+                    >
+                      {Array.from({
+                        length: rows,
+                      }).map((_, row) => (
+                        <div
+                          key={`row-${row}`}
+                          style={{
+                            width: `${NUMBER_GUTTER}px`,
+                            height: `${zoom}px`,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            fontSize: `${Math.max(
+                              8,
+                              Math.min(
+                                12,
+                                zoom * 0.5
+                              )
+                            )}px`,
+                            color: COLORS.muted,
+                            borderBottom: `1px solid ${COLORS.border}`,
+                            borderRight: `1px solid ${COLORS.border}`,
+                            boxSizing:
+                              "border-box",
+                            userSelect: "none",
+                          }}
+                        >
+                          {row + 1}
+                        </div>
+                      ))}
+                    </div>
 
-  if (tool === "mark" && marked) {
-    setDraggedMark(key);
-    return;
-  }
+                    <div
+                      style={{
+                        gridColumn: 2,
+                        gridRow: 2,
+                        position: "relative",
+                        width: `${columns * zoom}px`,
+                        height: `${rows * zoom}px`,
+                      }}
+                    >
+                      <canvas
+                        ref={canvasRef}
+                        style={{
+                          position: "absolute",
+                          inset: 0,
+                          display: "block",
+                          width: `${columns * zoom}px`,
+                          height: `${rows * zoom}px`,
+                          imageRendering:
+                            "pixelated",
+                          pointerEvents: "none",
+                        }}
+                      />
 
-  setMarks((previousMarks) => {
-    const updatedMarks = new Set(previousMarks);
+                      <div
+                        style={{
+                          position: "absolute",
+                          inset: 0,
+                          display: "grid",
+                          gridTemplateColumns: `repeat(${columns}, ${zoom}px)`,
+                          gridTemplateRows: `repeat(${rows}, ${zoom}px)`,
+                          width: `${columns * zoom}px`,
+                          height: `${rows * zoom}px`,
+                          pointerEvents:
+                            tool === "pan"
+                              ? "none"
+                              : "auto",
+                          touchAction: "none",
+                          userSelect: "none",
+                          WebkitUserSelect: "none",
+                          WebkitTouchCallout:
+                            "none",
+                        }}
+                      >
+                        {Array.from({
+                          length: rows,
+                        }).map((_, row) =>
+                          Array.from({
+                            length: columns,
+                          }).map(
+                            (_, column) => {
+                              const key = `${row}-${column}`;
+                              const marked =
+                                marks.has(key);
 
-    if (tool === "mark") {
-      updatedMarks.add(key);
-    }
+                              const selected =
+                                selectedMark === key;
 
-    if (tool === "erase") {
-      updatedMarks.delete(key);
-    }
-
-    return updatedMarks;
-  });
-}}
-onPointerEnter={() => {
-  if (!draggedMark || tool !== "mark" || draggedMark === key) return;
-
-  setMarks((previousMarks) => {
-    const updatedMarks = new Set(previousMarks);
-    updatedMarks.delete(draggedMark);
-    updatedMarks.add(key);
-    return updatedMarks;
-  });
-
-  setDraggedMark(key);
-}}
-onPointerUp={() => {
-  setDraggedMark(null);
-}}
-onPointerCancel={() => {
-  setDraggedMark(null);
-}}
-            style={{
-              width: "100%",
-              height: "100%",
-              padding: 0,
-              margin: 0,
-              border: "none",
-              background: "transparent",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: xColor,
-              fontSize: `${Math.max(8, zoom * (xSize / 100))}px`,
-              lineHeight: 1,
-              fontFamily: "Arial, sans-serif",
-              cursor: "crosshair",
-            }}
-          >
-            {marked ? "×" : ""}
-          </button>
-        );
-      })
-    )}
-  </div>
-</div>
+                              return (
+                                <button
+                                  key={key}
+                                  type="button"
+                                  aria-label={`Fila ${
+                                    row + 1
+                                  }, columna ${
+                                    column + 1
+                                  }`}
+                                  onContextMenu={(
+                                    event
+                                  ) =>
+                                    event.preventDefault()
+                                  }
+                                  onPointerDown={(
+                                    event
+                                  ) =>
+                                    handleCellPointerDown(
+                                      event,
+                                      key,
+                                      marked
+                                    )
+                                  }
+                                  onPointerEnter={() =>
+                                    handleCellPointerEnter(
+                                      key,
+                                      marked
+                                    )
+                                  }
+                                  onPointerUp={() =>
+                                    setPointerDown(
+                                      false
+                                    )
+                                  }
+                                  onPointerCancel={() =>
+                                    setPointerDown(
+                                      false
+                                    )
+                                  }
+                                  style={{
+                                    width: `${zoom}px`,
+                                    height: `${zoom}px`,
+                                    minWidth: 0,
+                                    minHeight: 0,
+                                    padding: 0,
+                                    margin: 0,
+                                    border: selected
+                                      ? `2px solid ${COLORS.lilac}`
+                                      : "none",
+                                    outline: "none",
+                                    boxSizing:
+                                      "border-box",
+                                    background:
+                                      selected
+                                        ? "rgba(201, 182, 228, 0.32)"
+                                        : "transparent",
+                                    display: "flex",
+                                    alignItems:
+                                      "center",
+                                    justifyContent:
+                                      "center",
+                                    color: xColor,
+                                    fontSize: `${Math.max(
+                                      7,
+                                      zoom *
+                                        (xSize / 100)
+                                    )}px`,
+                                    fontWeight: "700",
+                                    lineHeight: 1,
+                                    fontFamily:
+                                      "Arial, sans-serif",
+                                    cursor:
+                                      tool ===
+                                      "move-x"
+                                        ? "pointer"
+                                        : "crosshair",
+                                    touchAction:
+                                      "none",
+                                    userSelect:
+                                      "none",
+                                    WebkitUserSelect:
+                                      "none",
+                                    WebkitTouchCallout:
+                                      "none",
+                                  }}
+                                >
+                                  {marked
+                                    ? "×"
+                                    : ""}
+                                </button>
+                              );
+                            }
+                          )
+                        )}
+                      </div>
+                    </div>
+                  </div>
                 </section>
               )}
             </>
           )}
 
-          <canvas ref={processingCanvasRef} hidden />
+          <canvas
+            ref={processingCanvasRef}
+            hidden
+          />
         </div>
+
+        {imageSrc && referenceOpen && (
+          <aside
+            onPointerDown={startReferenceDrag}
+            onPointerMove={continueReferenceDrag}
+            onPointerUp={stopReferenceDrag}
+            onPointerCancel={stopReferenceDrag}
+            style={{
+              position: "fixed",
+              left: `${referencePosition.x}px`,
+              top: `${referencePosition.y}px`,
+              zIndex: 1000,
+              width: referenceMinimized
+                ? "190px"
+                : "min(310px, calc(100vw - 36px))",
+              background: COLORS.white,
+              border: `1px solid ${COLORS.border}`,
+              borderRadius: "14px",
+              boxShadow:
+                "0 8px 28px rgba(63, 63, 63, 0.22)",
+              overflow: "hidden",
+              touchAction: "none",
+              userSelect: "none",
+            }}
+          >
+            <div
+              style={{
+                height: "42px",
+                padding: "0 8px 0 12px",
+                background: COLORS.charcoal,
+                color: COLORS.white,
+                display: "flex",
+                alignItems: "center",
+                justifyContent:
+                  "space-between",
+                cursor: "move",
+              }}
+            >
+              <strong
+                style={{ fontSize: "13px" }}
+              >
+                Imagen de referencia
+              </strong>
+
+              <div
+                style={{
+                  display: "flex",
+                  gap: "5px",
+                }}
+              >
+                <button
+                  type="button"
+                  onPointerDown={(event) =>
+                    event.stopPropagation()
+                  }
+                  onClick={() =>
+                    setReferenceMinimized(
+                      (value) => !value
+                    )
+                  }
+                  style={{
+                    width: "30px",
+                    height: "30px",
+                    padding: 0,
+                    border: "none",
+                    borderRadius: "8px",
+                    background:
+                      "rgba(255,255,255,0.16)",
+                    color: COLORS.white,
+                    fontSize: "18px",
+                    cursor: "pointer",
+                  }}
+                >
+                  {referenceMinimized
+                    ? "+"
+                    : "−"}
+                </button>
+
+                <button
+                  type="button"
+                  onPointerDown={(event) =>
+                    event.stopPropagation()
+                  }
+                  onClick={() =>
+                    setReferenceOpen(false)
+                  }
+                  style={{
+                    width: "30px",
+                    height: "30px",
+                    padding: 0,
+                    border: "none",
+                    borderRadius: "8px",
+                    background:
+                      "rgba(255,255,255,0.16)",
+                    color: COLORS.white,
+                    fontSize: "18px",
+                    cursor: "pointer",
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+
+            {!referenceMinimized && (
+              <div
+                style={{
+                  padding: "8px",
+                  background: COLORS.cream,
+                }}
+              >
+                <img
+                  src={imageSrc}
+                  alt="Referencia del patrón"
+                  draggable={false}
+                  onDragStart={(event) =>
+                    event.preventDefault()
+                  }
+                  style={{
+                    display: "block",
+                    width: "100%",
+                    maxHeight: "360px",
+                    objectFit: "contain",
+                    borderRadius: "8px",
+                    background: COLORS.white,
+                    pointerEvents: "none",
+                  }}
+                />
+              </div>
+            )}
+          </aside>
+        )}
       </main>
     </AuthGuard>
   );
-        }
+      }

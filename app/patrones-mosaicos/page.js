@@ -925,7 +925,7 @@ const stopDrawing = () => {
               height: `${zoom}px`,
               padding: 0,
               margin: 0,
-              border: "none",
+              border: "1px solid red",
               background: "transparent",
               display: "flex",
               alignItems: "center",

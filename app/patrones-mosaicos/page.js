@@ -434,9 +434,166 @@ export default function PatronesMosaicos() {
     type: "paint",
     last: key,
   };
-    }
+    
   };
+const handleBoardPointerMove = (
+  event
+) => {
+  if (
+    !pointersRef.current.has(
+      event.pointerId
+    )
+  ) {
+    return;
+  }
 
+  event.preventDefault();
+
+  pointersRef.current.set(
+    event.pointerId,
+    {
+      x: event.clientX,
+      y: event.clientY,
+    }
+  );
+
+  const pointers = [
+    ...pointersRef.current.values(),
+  ];
+
+  if (pointers.length >= 2) {
+    if (
+      !gestureRef.current ||
+      gestureRef.current.type !== "pinch"
+    ) {
+      startPinch(pointers);
+    }
+
+    const gesture = gestureRef.current;
+    const first = pointers[0];
+    const second = pointers[1];
+
+    const currentCenter = getCenter(
+      first,
+      second
+    );
+
+    const nextZoom = clamp(
+      Math.round(
+        gesture.startZoom *
+          (getDistance(first, second) /
+            gesture.startDistance)
+      ),
+      MIN_ZOOM,
+      MAX_ZOOM
+    );
+
+    const ratio =
+      nextZoom / gesture.startZoom;
+
+    setZoom(nextZoom);
+
+    setBoardOffset({
+      x:
+        currentCenter.x -
+        (gesture.startCenter.x -
+          gesture.startOffset.x) *
+          ratio,
+      y:
+        currentCenter.y -
+        (gesture.startCenter.y -
+          gesture.startOffset.y) *
+          ratio,
+    });
+
+    return;
+  }
+
+  const gesture = gestureRef.current;
+
+  if (!gesture) {
+    return;
+  }
+
+  const key = getCellFromPoint(
+    event.clientX,
+    event.clientY
+  );
+
+  if (!key) {
+    return;
+  }
+
+  if (gesture.type === "move-mark") {
+    if (key === gesture.source) {
+      return;
+    }
+
+    setMarks((previous) => {
+      const next = new Set(previous);
+
+      next.delete(gesture.source);
+      next.add(key);
+
+      return next;
+    });
+
+    gesture.source = key;
+    gesture.destination = key;
+
+    return;
+  }
+
+  if (key === gesture.last) {
+    return;
+  }
+
+  const [previousRow, previousColumn] =
+    gesture.last.split("-").map(Number);
+
+  const [currentRow, currentColumn] =
+    key.split("-").map(Number);
+
+  const rowDifference =
+    currentRow - previousRow;
+
+  const columnDifference =
+    currentColumn - previousColumn;
+
+  const steps = Math.max(
+    Math.abs(rowDifference),
+    Math.abs(columnDifference)
+  );
+
+  for (
+    let step = 1;
+    step <= steps;
+    step += 1
+  ) {
+    const row = Math.round(
+      previousRow +
+        (rowDifference * step) / steps
+    );
+
+    const column = Math.round(
+      previousColumn +
+        (columnDifference * step) / steps
+    );
+
+    const intermediateKey =
+      `${row}-${column}`;
+
+    if (gesture.type === "paint") {
+      addMark(intermediateKey);
+    }
+
+    if (gesture.type === "erase") {
+      removeMark(intermediateKey);
+    }
+  }
+
+  gesture.last = key;
+};/
   const handleBoardPointerEnd = (
     event
   ) => {

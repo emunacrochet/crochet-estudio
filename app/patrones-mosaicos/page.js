@@ -373,181 +373,67 @@ export default function PatronesMosaicos() {
   };
 
   const handleBoardPointerDown = (
-    event
-  ) => {
-    event.preventDefault();
+  event
+) => {
+  event.preventDefault();
 
-    event.currentTarget.setPointerCapture?.(
-      event.pointerId
-    );
+  event.currentTarget.setPointerCapture?.(
+    event.pointerId
+  );
 
-    pointersRef.current.set(
-      event.pointerId,
-      {
-        x: event.clientX,
-        y: event.clientY,
-      }
-    );
-
-    const pointers = [
-      ...pointersRef.current.values(),
-    ];
-
-    if (pointers.length === 2) {
-      startPinch(pointers);
-      return;
+  pointersRef.current.set(
+    event.pointerId,
+    {
+      x: event.clientX,
+      y: event.clientY,
     }
+  );
 
-    const key = getCellFromPoint(
-      event.clientX,
-      event.clientY
-    );
+  const pointers = [
+    ...pointersRef.current.values(),
+  ];
 
-    if (!key) {
-      return;
-    }
+  if (pointers.length === 2) {
+    startPinch(pointers);
+    return;
+  }
 
-    if (marks.has(key)) {
-      gestureRef.current = {
-        type: "move-mark",
-        source: key,
-        destination: key,
-      };
+  const key = getCellFromPoint(
+    event.clientX,
+    event.clientY
+  );
 
-      return;
-    }
+  if (!key) {
+    return;
+  }
 
-    if (tool === "erase") {
-      removeMark(key);
+  if (tool === "erase") {
+    removeMark(key);
 
-      gestureRef.current = {
-        type: "erase",
-        last: key,
-      };
-    } else {
-      addMark(key);
+    gestureRef.current = {
+      type: "erase",
+      last: key,
+    };
 
-      gestureRef.current = {
-        type: "paint",
-        last: key,
-      };
-    }
+    return;
+  }
+
+  if (marks.has(key)) {
+    gestureRef.current = {
+      type: "move-mark",
+      source: key,
+      destination: key,
+    };
+
+    return;
+  }
+
+  addMark(key);
+
+  gestureRef.current = {
+    type: "paint",
+    last: key,
   };
-
-  const handleBoardPointerMove = (
-    event
-  ) => {
-    if (
-      !pointersRef.current.has(
-        event.pointerId
-      )
-    ) {
-      return;
-    }
-
-    event.preventDefault();
-
-    pointersRef.current.set(
-      event.pointerId,
-      {
-        x: event.clientX,
-        y: event.clientY,
-      }
-    );
-
-    const pointers = [
-      ...pointersRef.current.values(),
-    ];
-
-    if (pointers.length >= 2) {
-      if (
-        !gestureRef.current ||
-        gestureRef.current.type !==
-          "pinch"
-      ) {
-        startPinch(pointers);
-      }
-
-      const gesture =
-        gestureRef.current;
-
-      const first = pointers[0];
-      const second = pointers[1];
-
-      const currentCenter = getCenter(
-        first,
-        second
-      );
-
-      const nextZoom = clamp(
-        Math.round(
-          gesture.startZoom *
-            (getDistance(
-              first,
-              second
-            ) /
-              gesture.startDistance)
-        ),
-        MIN_ZOOM,
-        MAX_ZOOM
-      );
-
-      const ratio =
-        nextZoom / gesture.startZoom;
-
-      setZoom(nextZoom);
-
-      setBoardOffset({
-        x:
-          currentCenter.x -
-          (gesture.startCenter.x -
-            gesture.startOffset.x) *
-            ratio,
-        y:
-          currentCenter.y -
-          (gesture.startCenter.y -
-            gesture.startOffset.y) *
-            ratio,
-      });
-
-      return;
-    }
-
-    const gesture =
-      gestureRef.current;
-
-    if (!gesture) {
-      return;
-    }
-
-    const key = getCellFromPoint(
-      event.clientX,
-      event.clientY
-    );
-
-    if (!key) {
-      return;
-    }
-
-    if (
-      gesture.type === "move-mark"
-    ) {
-      gesture.destination = key;
-      return;
-    }
-
-    if (key === gesture.last) {
-      return;
-    }
-
-    gesture.last = key;
-
-    if (gesture.type === "paint") {
-      addMark(key);
-    }
-
-    if (gesture.type === "erase") {
-      removeMark(key);
     }
   };
 

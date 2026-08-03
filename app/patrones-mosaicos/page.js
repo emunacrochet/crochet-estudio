@@ -886,18 +886,18 @@ const stopDrawing = () => {
       left: `${offsetX}px`,
       top: `${offsetY}px`,
       display: "grid",
-      gridTemplateColumns: `repeat(${columns}, ${zoom}px)`,
-      gridTemplateRows: `repeat(${rows}, ${zoom}px)`,
-      width: `${columns * zoom}px`,
-      height: `${rows * zoom}px`,
-      pointerEvents: tool === "move" ? "none" : "auto",
-      touchAction: "none",
-    }}
-  >
-    {Array.from({ length: rows }).map((_, row) =>
-      Array.from({ length: columns }).map((_, column) => {
-        const key = `${row}-${column}`;
-        const marked = marks.has(key);
+gridTemplateColumns: `repeat(${columns}, 1fr)`,
+gridTemplateRows: `repeat(${rows}, 1fr)`,
+width: "100%",
+height: "100%",
+pointerEvents: tool === "move" ? "none" : "auto",
+touchAction: "none",
+}}
+>
+{Array.from({ length: rows }).map((_, row) =>
+  Array.from({ length: columns }).map((_, column) => {
+    const key = `${row}-${column}`;
+    const marked = marks.has(key);
 
         return (
           <button
@@ -908,10 +908,7 @@ const stopDrawing = () => {
 
               setMarks((previousMarks) => {
                 const updatedMarks = new Set(previousMarks);
-
-                if (tool === "mark") {
-                  updatedMarks.add(key);
-                }
+                
 
                 if (tool === "erase") {
                   updatedMarks.delete(key);
@@ -921,11 +918,11 @@ const stopDrawing = () => {
               });
             }}
             style={{
-              width: `${zoom}px`,
-              height: `${zoom}px`,
+              width: "100%",
+              height: "100%",
               padding: 0,
               margin: 0,
-              border: "1px solid red",
+              border: "none",
               background: "transparent",
               display: "flex",
               alignItems: "center",

@@ -268,38 +268,65 @@ export default function PatronesMosaicos() {
   ]);
 
   const getBoardPoint = useCallback(
-    (clientX, clientY) => {
-      const board = boardRef.current;
+  (clientX, clientY) => {
+    const board = boardRef.current;
 
-      if (!board || !rows) {
-        return null;
-      }
+    if (!board || !rows) {
+      return null;
+    }
 
-      const rect =
-        board.getBoundingClientRect();
+    const rect =
+      board.getBoundingClientRect();
 
-      const x =
-        (clientX - rect.left) / zoom;
+    const rawX =
+      (clientX - rect.left) / zoom;
 
-      const y =
-        (clientY - rect.top) / zoom;
+    const rawY =
+      (clientY - rect.top) / zoom;
 
-      if (
-        x < 0 ||
-        x > columns ||
-        y < 0 ||
-        y > rows
-      ) {
-        return null;
-      }
+    if (
+      rawX < 0 ||
+      rawX >= columns ||
+      rawY < 0 ||
+      rawY >= rows
+    ) {
+      return null;
+    }
 
-      return {
-        x,
-        y,
-      };
-    },
-    [columns, rows, zoom]
-  );
+    const column = Math.floor(rawX);
+    const row = Math.floor(rawY);
+
+    const margin = clamp(
+      xSize / 300,
+      0.12,
+      0.32
+    );
+
+    const positionInsideColumn =
+      clamp(
+        rawX - column,
+        margin,
+        1 - margin
+      );
+
+    const positionInsideRow =
+      clamp(
+        rawY - row,
+        margin,
+        1 - margin
+      );
+
+    return {
+      x:
+        column +
+        positionInsideColumn,
+      y:
+        row +
+        positionInsideRow,
+    };
+  },
+  [columns, rows, zoom, xSize]
+);
 
   const addFreeMark = useCallback(
     (point) => {

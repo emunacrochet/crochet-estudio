@@ -179,7 +179,7 @@ export default function PatronesMosaicos() {
       )
     );
 
-    setMarks([]);
+
 
     setBoardOffset({
       x: 0,

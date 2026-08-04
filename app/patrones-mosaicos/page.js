@@ -317,13 +317,15 @@ export default function PatronesMosaicos() {
       );
 
     return {
-      x:
-        column +
-        positionInsideColumn,
-      y:
-        row +
-        positionInsideRow,
-    };
+  x:
+    (column +
+      positionInsideColumn) /
+    columns,
+  y:
+    (row +
+      positionInsideRow) /
+    rows,
+};
   },
   [columns, rows, zoom, xSize]
 );
@@ -718,9 +720,9 @@ export default function PatronesMosaicos() {
       context.fillText(
         "×",
         NUMBER_GUTTER +
-          mark.x * zoom,
-        TOP_GUTTER +
-          mark.y * zoom
+  mark.x * columns * zoom,
+TOP_GUTTER +
+  mark.y * rows * zoom
       );
     });
 
@@ -1388,8 +1390,10 @@ export default function PatronesMosaicos() {
                         }}
                         style={{
                           position: "absolute",
-                          left: mark.x * zoom,
-                          top: mark.y * zoom,
+                          left:
+                           mark.x * columns * zoom,
+                           top:
+                           mark.y * rows * zoom,
                           transform:
                             "translate(-50%, -50%)",
                           width: Math.max(

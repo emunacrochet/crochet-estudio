@@ -63,6 +63,7 @@ export default function PatronesMosaicos() {
   const imageRef = useRef(null);
   const canvasRef = useRef(null);
   const viewportRef = useRef(null);
+  const boardRef = useRef(null);
   const pointersRef = useRef(new Map());
   const gestureRef = useRef(null);
   const referenceDragRef = useRef(null);
@@ -265,32 +266,40 @@ export default function PatronesMosaicos() {
   ]);
 
   const getCellFromPoint = useCallback(
-    (clientX, clientY) => {
-      const viewport =
-        viewportRef.current;
+  (clientX, clientY) => {
+    const board = boardRef.current;
 
-      if (!viewport || !rows) {
-        return null;
-      }
+    if (!board || !rows) {
+      return null;
+    }
 
-      const rect =
-        viewport.getBoundingClientRect();
+    const rect =
+      board.getBoundingClientRect();
 
-      const x =
-        clientX -
-        rect.left -
-        boardOffset.x -
-        NUMBER_GUTTER;
+    const x = clientX - rect.left;
+    const y = clientY - rect.top;
 
-      const y =
-        clientY -
-        rect.top -
-        boardOffset.y -
-        TOP_GUTTER;
+    const column = Math.floor(
+      x / zoom
+    );
 
-      const column = Math.floor(
-        x / zoom
-      );
+    const row = Math.floor(
+      y / zoom
+    );
+
+    if (
+      column < 0 ||
+      column >= columns ||
+      row < 0 ||
+      row >= rows
+    ) {
+      return null;
+    }
+
+    return `${row}-${column}`;
+  },
+  [columns, rows, zoom]
+);
 
       const row = Math.floor(
         y / zoom
@@ -1400,6 +1409,7 @@ const handleBoardPointerMove = (
                   </div>
 
                   <div
+                   ref={boardRef}
                     style={{
                       gridColumn: 2,
                       gridRow: 2,

@@ -13,6 +13,7 @@ const COLORS = {
   muted: "#746F6A",
   border: "#DED8D1",
 };
+
 const NUMBER_GUTTER = 34;
 const TOP_GUTTER = 28;
 const MIN_ZOOM = 8;
@@ -38,7 +39,8 @@ export default function PatronesMosaicos() {
   const [xColor, setXColor] = useState("#3F3F3F");
   const [showGrid, setShowGrid] = useState(true);
   const [tool, setTool] = useState("mark");
-  const [marks, setMarks] = useState(new Set());
+  const [marks, setMarks] = useState([]);
+
   const [boardOffset, setBoardOffset] = useState({
     x: 0,
     y: 0,
@@ -62,11 +64,11 @@ export default function PatronesMosaicos() {
   const fileRef = useRef(null);
   const imageRef = useRef(null);
   const canvasRef = useRef(null);
-  const viewportRef = useRef(null);
   const boardRef = useRef(null);
   const pointersRef = useRef(new Map());
   const gestureRef = useRef(null);
   const referenceDragRef = useRef(null);
+  const nextMarkIdRef = useRef(1);
 
   const cardStyle = {
     background: COLORS.white,
@@ -143,7 +145,7 @@ export default function PatronesMosaicos() {
         );
 
         setImageSrc(src);
-        setMarks(new Set());
+        setMarks([]);
 
         setBoardOffset({
           x: 0,
@@ -177,7 +179,7 @@ export default function PatronesMosaicos() {
       )
     );
 
-    setMarks(new Set());
+    setMarks([]);
 
     setBoardOffset({
       x: 0,
@@ -265,68 +267,68 @@ export default function PatronesMosaicos() {
     imageSrc,
   ]);
 
-  const getCellFromPoint = useCallback(
-  (clientX, clientY) => {
-    const board = boardRef.current;
+  const getBoardPoint = useCallback(
+    (clientX, clientY) => {
+      const board = boardRef.current;
 
-    if (!board || !rows) {
-      return null;
-    }
-
-    const rect = board.getBoundingClientRect();
-
-    const x = clientX - rect.left;
-    const y = clientY - rect.top;
-
-    const column = Math.floor(x / zoom);
-    const row = Math.floor(y / zoom);
-
-    if (
-      column < 0 ||
-      column >= columns ||
-      row < 0 ||
-      row >= rows
-    ) {
-      return null;
-    }
-
-    return `${row}-${column}`;
-  },
-  [columns, rows, zoom]
-);
-  const addMark = useCallback((key) => {
-    if (!key) {
-      return;
-    }
-
-    setMarks((previous) => {
-      if (previous.has(key)) {
-        return previous;
+      if (!board || !rows) {
+        return null;
       }
 
-      const next = new Set(previous);
-      next.add(key);
+      const rect =
+        board.getBoundingClientRect();
 
-      return next;
-    });
-  }, []);
+      const x =
+        (clientX - rect.left) / zoom;
 
-  const removeMark = useCallback((key) => {
-    if (!key) {
-      return;
-    }
+      const y =
+        (clientY - rect.top) / zoom;
 
-    setMarks((previous) => {
-      if (!previous.has(key)) {
-        return previous;
+      if (
+        x < 0 ||
+        x > columns ||
+        y < 0 ||
+        y > rows
+      ) {
+        return null;
       }
 
-      const next = new Set(previous);
-      next.delete(key);
+      return {
+        x,
+        y,
+      };
+    },
+    [columns, rows, zoom]
+  );
 
-      return next;
-    });
-  }, []);
+  const addFreeMark = useCallback(
+    (point) => {
+      if (!point) {
+        return;
+      }
+
+      setMarks((previous) => [
+        ...previous,
+        {
+          id: nextMarkIdRef.current++,
+          x: point.x,
+          y: point.y,
+        },
+      ]);
+    },
+    []
+  );
+
+  const removeMarkById = useCallback(
+    (id) => {
+      setMarks((previous) =>
+        previous.filter(
+          (mark) => mark.id !== id
+        )
+      );
+    },
+    []
+  );
 
   const startPinch = (pointers) => {
     const first = pointers[0];
@@ -350,231 +352,173 @@ export default function PatronesMosaicos() {
   };
 
   const handleBoardPointerDown = (
-  event
-) => {
-  event.preventDefault();
+    event
+  ) => {
+    event.preventDefault();
 
-  event.currentTarget.setPointerCapture?.(
-    event.pointerId
-  );
-
-  pointersRef.current.set(
-    event.pointerId,
-    {
-      x: event.clientX,
-      y: event.clientY,
-    }
-  );
-
-  const pointers = [
-    ...pointersRef.current.values(),
-  ];
-
-  if (pointers.length === 2) {
-    startPinch(pointers);
-    return;
-  }
-
-  const key = getCellFromPoint(
-    event.clientX,
-    event.clientY
-  );
-
-  if (!key) {
-    return;
-  }
-
-    if (tool === "erase") {
-  removeMark(key);
-  gestureRef.current = null;
-  return;
-}
-
-addMark(key);
-gestureRef.current = null;
-};
-const handleBoardPointerMove = (
-  event
-) => {
-  if (
-    !pointersRef.current.has(
+    event.currentTarget.setPointerCapture?.(
       event.pointerId
-    )
-  ) {
-    return;
-  }
+    );
 
-  event.preventDefault();
+    pointersRef.current.set(
+      event.pointerId,
+      {
+        x: event.clientX,
+        y: event.clientY,
+      }
+    );
 
-  pointersRef.current.set(
-    event.pointerId,
-    {
-      x: event.clientX,
-      y: event.clientY,
-    }
-  );
+    const pointers = [
+      ...pointersRef.current.values(),
+    ];
 
-  const pointers = [
-    ...pointersRef.current.values(),
-  ];
-
-  if (pointers.length >= 2) {
-    if (
-      !gestureRef.current ||
-      gestureRef.current.type !== "pinch"
-    ) {
+    if (pointers.length === 2) {
       startPinch(pointers);
-    }
-
-    const gesture = gestureRef.current;
-    const first = pointers[0];
-    const second = pointers[1];
-
-    const currentCenter = getCenter(
-      first,
-      second
-    );
-
-    const nextZoom = clamp(
-      Math.round(
-        gesture.startZoom *
-          (getDistance(first, second) /
-            gesture.startDistance)
-      ),
-      MIN_ZOOM,
-      MAX_ZOOM
-    );
-
-    const ratio =
-      nextZoom / gesture.startZoom;
-
-    setZoom(nextZoom);
-
-    setBoardOffset({
-      x:
-        currentCenter.x -
-        (gesture.startCenter.x -
-          gesture.startOffset.x) *
-          ratio,
-      y:
-        currentCenter.y -
-        (gesture.startCenter.y -
-          gesture.startOffset.y) *
-          ratio,
-    });
-
-    return;
-  }
-
-  const gesture = gestureRef.current;
-
-  if (!gesture) {
-    return;
-  }
-
-  const key = getCellFromPoint(
-    event.clientX,
-    event.clientY
-  );
-
-  if (!key) {
-    return;
-  }
-
-  if (gesture.type === "move-mark") {
-    if (key === gesture.source) {
       return;
     }
 
-    setMarks((previous) => {
-      const next = new Set(previous);
-
-      next.delete(gesture.source);
-      next.add(key);
-
-      return next;
-    });
-
-    gesture.source = key;
-    gesture.destination = key;
-
-    return;
-  }
-
-  if (key === gesture.last) {
-    return;
-  }
-
-  const [previousRow, previousColumn] =
-    gesture.last.split("-").map(Number);
-
-  const [currentRow, currentColumn] =
-    key.split("-").map(Number);
-
-  const rowDifference =
-    currentRow - previousRow;
-
-  const columnDifference =
-    currentColumn - previousColumn;
-
-  const steps = Math.max(
-    Math.abs(rowDifference),
-    Math.abs(columnDifference)
-  );
-
-  for (
-    let step = 1;
-    step <= steps;
-    step += 1
-  ) {
-    const row = Math.round(
-      previousRow +
-        (rowDifference * step) / steps
-    );
-
-    const column = Math.round(
-      previousColumn +
-        (columnDifference * step) / steps
-    );
-
-    const intermediateKey =
-      `${row}-${column}`;
-
-    if (gesture.type === "paint") {
-      addMark(intermediateKey);
+    if (tool !== "mark") {
+      gestureRef.current = null;
+      return;
     }
 
-    if (gesture.type === "erase") {
-      removeMark(intermediateKey);
-    }
-  }
+    gestureRef.current = {
+      type: "pending-mark",
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      point: getBoardPoint(
+        event.clientX,
+        event.clientY
+      ),
+      moved: false,
+    };
+  };
 
-  gesture.last = key;
-};
-  const handleBoardPointerEnd = (
+  const handleBoardPointerMove = (
     event
   ) => {
-    pointersRef.current.delete(
-      event.pointerId
+    if (
+      !pointersRef.current.has(
+        event.pointerId
+      )
+    ) {
+      return;
+    }
+
+    event.preventDefault();
+
+    pointersRef.current.set(
+      event.pointerId,
+      {
+        x: event.clientX,
+        y: event.clientY,
+      }
     );
+
+    const pointers = [
+      ...pointersRef.current.values(),
+    ];
+
+    if (pointers.length >= 2) {
+      if (
+        !gestureRef.current ||
+        gestureRef.current.type !==
+          "pinch"
+      ) {
+        startPinch(pointers);
+      }
+
+      const gesture =
+        gestureRef.current;
+
+      const first = pointers[0];
+      const second = pointers[1];
+
+      const currentCenter = getCenter(
+        first,
+        second
+      );
+
+      const nextZoom = clamp(
+        Math.round(
+          gesture.startZoom *
+            (getDistance(
+              first,
+              second
+            ) /
+              gesture.startDistance)
+        ),
+        MIN_ZOOM,
+        MAX_ZOOM
+      );
+
+      const ratio =
+        nextZoom / gesture.startZoom;
+
+      setZoom(nextZoom);
+
+      setBoardOffset({
+        x:
+          currentCenter.x -
+          (gesture.startCenter.x -
+            gesture.startOffset.x) *
+            ratio,
+        y:
+          currentCenter.y -
+          (gesture.startCenter.y -
+            gesture.startOffset.y) *
+            ratio,
+      });
+
+      return;
+    }
 
     const gesture =
       gestureRef.current;
 
     if (
-      gesture?.type === "move-mark" &&
-      gesture.source &&
-      gesture.destination
+      gesture?.type ===
+        "pending-mark" &&
+      gesture.pointerId ===
+        event.pointerId
     ) {
-      setMarks((previous) => {
-        const next = new Set(previous);
+      const movementDistance =
+        Math.hypot(
+          event.clientX -
+            gesture.startX,
+          event.clientY -
+            gesture.startY
+        );
 
-        next.delete(gesture.source);
-        next.add(gesture.destination);
-
-        return next;
-      });
+      if (movementDistance > 8) {
+        gesture.moved = true;
+      }
     }
+  };
+
+  const handleBoardPointerEnd = (
+    event
+  ) => {
+    const gesture =
+      gestureRef.current;
+
+    if (
+      gesture?.type ===
+        "pending-mark" &&
+      gesture.pointerId ===
+        event.pointerId &&
+      !gesture.moved &&
+      pointersRef.current.size === 1
+    ) {
+      addFreeMark(
+        gesture.point
+      );
+    }
+
+    pointersRef.current.delete(
+      event.pointerId
+    );
 
     if (
       pointersRef.current.size === 0
@@ -637,7 +581,7 @@ const handleBoardPointerMove = (
   const resetImage = () => {
     setImageSrc("");
     setRows(0);
-    setMarks(new Set());
+    setMarks([]);
 
     setBoardOffset({
       x: 0,
@@ -743,20 +687,13 @@ const handleBoardPointerMove = (
       zoom * (xSize / 100)
     )}px Arial`;
 
-    marks.forEach((key) => {
-      const [row, column] = key
-        .split("-")
-        .map(Number);
-
+    marks.forEach((mark) => {
       context.fillText(
         "×",
         NUMBER_GUTTER +
-          column * zoom +
-          zoom / 2,
+          mark.x * zoom,
         TOP_GUTTER +
-          row * zoom +
-          zoom / 2 +
-          1
+          mark.y * zoom
       );
     });
 
@@ -816,10 +753,10 @@ const handleBoardPointerMove = (
                 lineHeight: 1.55,
               }}
             >
-              Subí un patrón ya pixelado.
-              Tocá para marcar, arrastrá una
-              X para moverla y usá dos dedos
-              para ampliar o desplazar el
+              Tocá cualquier punto para
+              colocar una X exactamente
+              allí. Usá dos dedos para
+              ampliar o desplazar el
               tablero.
             </p>
           </header>
@@ -897,7 +834,8 @@ const handleBoardPointerMove = (
                 hidden
                 onChange={(event) =>
                   uploadImage(
-                    event.target.files?.[0]
+                    event.target
+                      .files?.[0]
                   )
                 }
               />
@@ -950,7 +888,8 @@ const handleBoardPointerMove = (
                     type="button"
                     onClick={() =>
                       setControlsMinimized(
-                        (value) => !value
+                        (value) =>
+                          !value
                       )
                     }
                     style={{
@@ -971,7 +910,8 @@ const handleBoardPointerMove = (
                     style={{
                       maxHeight:
                         "calc(48vh - 58px)",
-                      overflowY: "auto",
+                      overflowY:
+                        "auto",
                     }}
                   >
                     <div
@@ -986,7 +926,8 @@ const handleBoardPointerMove = (
                         <label
                           style={labelStyle}
                         >
-                          Columnas: {columns}
+                          Columnas:{" "}
+                          {columns}
                         </label>
 
                         <input
@@ -994,16 +935,20 @@ const handleBoardPointerMove = (
                           min="8"
                           max="100"
                           value={columns}
-                          onChange={(event) =>
+                          onChange={(
+                            event
+                          ) =>
                             setColumns(
                               Number(
-                                event.target
+                                event
+                                  .target
                                   .value
                               )
                             )
                           }
                           style={{
-                            width: "100%",
+                            width:
+                              "100%",
                             accentColor:
                               COLORS.lilac,
                           }}
@@ -1022,16 +967,20 @@ const handleBoardPointerMove = (
                           min={MIN_ZOOM}
                           max={MAX_ZOOM}
                           value={zoom}
-                          onChange={(event) =>
+                          onChange={(
+                            event
+                          ) =>
                             setZoom(
                               Number(
-                                event.target
+                                event
+                                  .target
                                   .value
                               )
                             )
                           }
                           style={{
-                            width: "100%",
+                            width:
+                              "100%",
                             accentColor:
                               COLORS.pink,
                           }}
@@ -1042,7 +991,8 @@ const handleBoardPointerMove = (
                         <label
                           style={labelStyle}
                         >
-                          Tamaño X: {xSize}%
+                          Tamaño X:{" "}
+                          {xSize}%
                         </label>
 
                         <input
@@ -1050,16 +1000,20 @@ const handleBoardPointerMove = (
                           min="35"
                           max="95"
                           value={xSize}
-                          onChange={(event) =>
+                          onChange={(
+                            event
+                          ) =>
                             setXSize(
                               Number(
-                                event.target
+                                event
+                                  .target
                                   .value
                               )
                             )
                           }
                           style={{
-                            width: "100%",
+                            width:
+                              "100%",
                             accentColor:
                               COLORS.charcoal,
                           }}
@@ -1076,13 +1030,18 @@ const handleBoardPointerMove = (
                         <input
                           type="color"
                           value={xColor}
-                          onChange={(event) =>
+                          onChange={(
+                            event
+                          ) =>
                             setXColor(
-                              event.target.value
+                              event
+                                .target
+                                .value
                             )
                           }
                           style={{
-                            width: "100%",
+                            width:
+                              "100%",
                             height: 38,
                             border: `1px solid ${COLORS.border}`,
                             borderRadius: 9,
@@ -1129,7 +1088,8 @@ const handleBoardPointerMove = (
                         type="button"
                         onClick={() =>
                           setShowGrid(
-                            (value) => !value
+                            (value) =>
+                              !value
                           )
                         }
                         style={buttonStyle(
@@ -1144,7 +1104,7 @@ const handleBoardPointerMove = (
                       <button
                         type="button"
                         onClick={() =>
-                          setMarks(new Set())
+                          setMarks([])
                         }
                         style={buttonStyle()}
                       >
@@ -1155,7 +1115,8 @@ const handleBoardPointerMove = (
                         type="button"
                         onClick={() =>
                           setReferenceOpen(
-                            (value) => !value
+                            (value) =>
+                              !value
                           )
                         }
                         style={buttonStyle(
@@ -1190,10 +1151,12 @@ const handleBoardPointerMove = (
                     <div
                       style={{
                         marginTop: 12,
-                        padding: "9px 10px",
+                        padding:
+                          "9px 10px",
                         borderRadius: 10,
                         background:
-                          tool === "erase"
+                          tool ===
+                          "erase"
                             ? COLORS.pink
                             : COLORS.mint,
                         fontSize: 12,
@@ -1201,16 +1164,16 @@ const handleBoardPointerMove = (
                       }}
                     >
                       {tool === "erase"
-                        ? "Tocá o arrastrá sobre las X para borrarlas."
-                        : "Tocá una celda para crear una X. Arrastrá una X existente para moverla. Dos dedos amplían y desplazan."}
+                        ? "Tocá directamente la X que querés borrar."
+                        : "Tocá cualquier punto para colocar una X exactamente allí. Dos dedos amplían y desplazan."}
 
                       <strong
                         style={{
                           marginLeft: 7,
                         }}
                       >
-                        {marks.size}{" "}
-                        {marks.size === 1
+                        {marks.length}{" "}
+                        {marks.length === 1
                           ? "marca"
                           : "marcas"}
                       </strong>
@@ -1225,412 +1188,4 @@ const handleBoardPointerMove = (
                     controlsMinimized
                       ? 60
                       : 190,
-                }}
-              />
-
-              <section
-                ref={viewportRef}
-                onPointerDown={
-                  handleBoardPointerDown
-                }
-                onPointerMove={
-                  handleBoardPointerMove
-                }
-                onPointerUp={
-                  handleBoardPointerEnd
-                }
-                onPointerCancel={
-                  handleBoardPointerEnd
-                }
-                onContextMenu={(event) =>
-                  event.preventDefault()
-                }
-                style={{
-                  ...cardStyle,
-                  position: "relative",
-                  height: "72vh",
-                  overflow: "hidden",
-                  padding: 0,
-                  touchAction: "none",
-                  userSelect: "none",
-                  WebkitUserSelect:
-                    "none",
-                  WebkitTouchCallout:
-                    "none",
-                }}
-              >
-                <div
-                  style={{
-                    position: "absolute",
-                    left: boardOffset.x,
-                    top: boardOffset.y,
-                    display: "grid",
-                    gridTemplateColumns: `${NUMBER_GUTTER}px ${
-                      columns * zoom
-                    }px`,
-                    gridTemplateRows: `${TOP_GUTTER}px ${
-                      rows * zoom
-                    }px`,
-                    width:
-                      NUMBER_GUTTER +
-                      columns * zoom,
-                    height:
-                      TOP_GUTTER +
-                      rows * zoom,
-                  }}
-                >
-                  <div
-                    style={{
-                      gridColumn: 1,
-                      gridRow: 1,
-                      background:
-                        COLORS.white,
-                      borderRight: `1px solid ${COLORS.border}`,
-                      borderBottom: `1px solid ${COLORS.border}`,
-                    }}
-                  />
-
-                  <div
-                    style={{
-                      gridColumn: 2,
-                      gridRow: 1,
-                      display: "grid",
-                      gridTemplateColumns: `repeat(${columns}, ${zoom}px)`,
-                      background:
-                        COLORS.white,
-                    }}
-                  >
-                    {Array.from({
-                      length: columns,
-                    }).map(
-                      (_, column) => (
-                        <div
-                          key={`column-${column}`}
-                          style={{
-                            width: zoom,
-                            height:
-                              TOP_GUTTER,
-                            display: "grid",
-                            placeItems:
-                              "center",
-                            fontSize:
-                              Math.max(
-                                8,
-                                Math.min(
-                                  12,
-                                  zoom * 0.5
-                                )
-                              ),
-                            color:
-                              COLORS.muted,
-                            borderRight: `1px solid ${COLORS.border}`,
-                            boxSizing:
-                              "border-box",
-                          }}
-                        >
-                          {column + 1}
-                        </div>
-                      )
-                    )}
-                  </div>
-
-                  <div
-                    style={{
-                      gridColumn: 1,
-                      gridRow: 2,
-                      display: "grid",
-                      gridTemplateRows: `repeat(${rows}, ${zoom}px)`,
-                      background:
-                        COLORS.white,
-                    }}
-                  >
-                    {Array.from({
-                      length: rows,
-                    }).map((_, row) => (
-                      <div
-                        key={`row-${row}`}
-                        style={{
-                          width:
-                            NUMBER_GUTTER,
-                          height: zoom,
-                          display: "grid",
-                          placeItems:
-                            "center",
-                          fontSize:
-                            Math.max(
-                              8,
-                              Math.min(
-                                12,
-                                zoom * 0.5
-                              )
-                            ),
-                          color:
-                            COLORS.muted,
-                          borderRight: `1px solid ${COLORS.border}`,
-                          borderBottom: `1px solid ${COLORS.border}`,
-                          boxSizing:
-                            "border-box",
-                        }}
-                      >
-                        {row + 1}
-                      </div>
-                    ))}
-                  </div>
-
-                  <div
-                   ref={boardRef}
-                    style={{
-                      gridColumn: 2,
-                      gridRow: 2,
-                      position: "relative",
-                      width:
-                        columns * zoom,
-                      height:
-                        rows * zoom,
-                    }}
-                  >
-                    <canvas
-                      ref={canvasRef}
-                      style={{
-                        position:
-                          "absolute",
-                        inset: 0,
-                        width:
-                          columns * zoom,
-                        height:
-                          rows * zoom,
-                        imageRendering:
-                          "pixelated",
-                        pointerEvents:
-                          "none",
-                      }}
-                    />
-
-                    <div
-                      style={{
-                        position:
-                          "absolute",
-                        inset: 0,
-                        display: "grid",
-                        gridTemplateColumns: `repeat(${columns}, ${zoom}px)`,
-                        gridTemplateRows: `repeat(${rows}, ${zoom}px)`,
-                        pointerEvents:
-                          "none",
-                      }}
-                    >
-                     {Array.from({
-  length: rows,
-}).map((_, row) =>
-  Array.from({
-    length: columns,
-  }).map((__, column) => {
-    const key = `${row}-${column}`;
-
-    return (
-      <button
-        key={key}
-        type="button"
-        onPointerDown={(event) => {
-          event.preventDefault();
-          event.stopPropagation();
-
-          if (tool === "erase") {
-            removeMark(key);
-          } else {
-            addMark(key);
-          }
-        }}
-        style={{
-          width: zoom,
-          height: zoom,
-          padding: 0,
-          margin: 0,
-          border: "none",
-          background: "transparent",
-          display: "grid",
-          placeItems: "center",
-          color: xColor,
-          fontSize: Math.max(
-            7,
-            zoom * (xSize / 100)
-          ),
-          fontWeight: 700,
-          lineHeight: 1,
-          touchAction: "none",
-        }}
-      >
-        {marks.has(key) ? "×" : ""}
-      </button>
-    );
-  })
-)}
-                    </div>
-                  </div>
-                </div>
-              </section>
-            </>
-          )}
-        </div>
-
-        {imageSrc &&
-          referenceOpen && (
-            <aside
-              onPointerDown={
-                startReferenceDrag
-              }
-              onPointerMove={
-                moveReference
-              }
-              onPointerUp={
-                stopReferenceDrag
-              }
-              onPointerCancel={
-                stopReferenceDrag
-              }
-              style={{
-                position: "fixed",
-                left:
-                  referencePosition.x,
-                top:
-                  referencePosition.y,
-                zIndex: 1300,
-                width:
-                  referenceMinimized
-                    ? 190
-                    : "min(310px, calc(100vw - 36px))",
-                background:
-                  COLORS.white,
-                border: `1px solid ${COLORS.border}`,
-                borderRadius: 14,
-                boxShadow:
-                  "0 8px 28px rgba(63, 63, 63, 0.22)",
-                overflow: "hidden",
-                touchAction: "none",
-                userSelect: "none",
-              }}
-            >
-              <div
-                style={{
-                  height: 42,
-                  padding:
-                    "0 8px 0 12px",
-                  background:
-                    COLORS.charcoal,
-                  color: COLORS.white,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent:
-                    "space-between",
-                  cursor: "move",
-                }}
-              >
-                <strong
-                  style={{
-                    fontSize: 13,
-                  }}
-                >
-                  Imagen de referencia
-                </strong>
-
-                <div
-                  style={{
-                    display: "flex",
-                    gap: 5,
-                  }}
-                >
-                  <button
-                    type="button"
-                    onPointerDown={(
-                      event
-                    ) =>
-                      event.stopPropagation()
-                    }
-                    onClick={() =>
-                      setReferenceMinimized(
-                        (value) => !value
-                      )
-                    }
-                    style={{
-                      width: 30,
-                      height: 30,
-                      padding: 0,
-                      border: "none",
-                      borderRadius: 8,
-                      background:
-                        "rgba(255, 255, 255, 0.16)",
-                      color:
-                        COLORS.white,
-                      fontSize: 18,
-                    }}
-                  >
-                    {referenceMinimized
-                      ? "+"
-                      : "−"}
-                  </button>
-
-                  <button
-                    type="button"
-                    onPointerDown={(
-                      event
-                    ) =>
-                      event.stopPropagation()
-                    }
-                    onClick={() =>
-                      setReferenceOpen(
-                        false
-                      )
-                    }
-                    style={{
-                      width: 30,
-                      height: 30,
-                      padding: 0,
-                      border: "none",
-                      borderRadius: 8,
-                      background:
-                        "rgba(255, 255, 255, 0.16)",
-                      color:
-                        COLORS.white,
-                      fontSize: 18,
-                    }}
-                  >
-                    ×
-                  </button>
-                </div>
-              </div>
-
-              {!referenceMinimized && (
-                <div
-                  style={{
-                    padding: 8,
-                    background:
-                      COLORS.cream,
-                  }}
-                >
-                  <img
-                    src={imageSrc}
-                    alt="Referencia del patrón"
-                    draggable={false}
-                    onDragStart={(event) =>
-                      event.preventDefault()
-                    }
-                    style={{
-                      display: "block",
-                      width: "100%",
-                      maxHeight: 360,
-                      objectFit:
-                        "contain",
-                      borderRadius: 8,
-                      background:
-                        COLORS.white,
-                      pointerEvents:
-                        "none",
-                    }}
-                  />
-                </div>
-              )}
-            </aside>
-          )}
-      </main>
-    </AuthGuard>
-  );
-    }
+               

@@ -316,14 +316,9 @@ export default function PatronesMosaicos() {
 
       return `${row}-${column}`;
     },
-    [
-      boardOffset.x,
-      boardOffset.y,
-      columns,
-      rows,
-      zoom,
-    ]
-  );
+  
+[columns, rows, zoom]
+);
 
   const addMark = useCallback((key) => {
     if (!key) {

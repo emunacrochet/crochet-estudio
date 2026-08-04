@@ -273,19 +273,13 @@ export default function PatronesMosaicos() {
       return null;
     }
 
-    const rect =
-      board.getBoundingClientRect();
+    const rect = board.getBoundingClientRect();
 
     const x = clientX - rect.left;
     const y = clientY - rect.top;
 
-    const column = Math.floor(
-      x / zoom
-    );
-
-    const row = Math.floor(
-      y / zoom
-    );
+    const column = Math.floor(x / zoom);
+    const row = Math.floor(y / zoom);
 
     if (
       column < 0 ||
@@ -297,27 +291,9 @@ export default function PatronesMosaicos() {
     }
 
     return `${row}-${column}`;
-  
-
-      const row = Math.floor(
-        y / zoom
-      );
-
-      if (
-        column < 0 ||
-        column >= columns ||
-        row < 0 ||
-        row >= rows
-      ) {
-        return null;
-      }
-
-      return `${row}-${column}`;
-    },
-  
-[columns, rows, zoom]
+  },
+  [columns, rows, zoom]
 );
-
   const addMark = useCallback((key) => {
     if (!key) {
       return;

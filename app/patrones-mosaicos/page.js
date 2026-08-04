@@ -1418,52 +1418,52 @@ const handleBoardPointerMove = (
                           "none",
                       }}
                     >
-                      {Array.from({
-                        length: rows,
-                      }).map((_, row) =>
-                        Array.from({
-                          length: columns,
-                        }).map(
-                          (__, column) => {
-                            const key = `${row}-${column}`;
+                     {Array.from({
+  length: rows,
+}).map((_, row) =>
+  Array.from({
+    length: columns,
+  }).map((__, column) => {
+    const key = `${row}-${column}`;
 
-                            return (
-                              <div
-                                key={key}
-                                style={{
-                                  width:
-                                    zoom,
-                                  height:
-                                    zoom,
-                                  display:
-                                    "grid",
-                                  placeItems:
-                                    "center",
-                                  color:
-                                    xColor,
-                                  fontSize:
-                                    Math.max(
-                                      7,
-                                      zoom *
-                                        (xSize /
-                                          100)
-                                    ),
-                                  fontWeight:
-                                    700,
-                                  lineHeight:
-                                    1,
-                                }}
-                              >
-                                {marks.has(
-                                  key
-                                )
-                                  ? "×"
-                                  : ""}
-                              </div>
-                            );
-                          }
-                        )
-                      )}
+    return (
+      <button
+        key={key}
+        type="button"
+        onPointerDown={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+
+          if (tool === "erase") {
+            removeMark(key);
+          } else {
+            addMark(key);
+          }
+        }}
+        style={{
+          width: zoom,
+          height: zoom,
+          padding: 0,
+          margin: 0,
+          border: "none",
+          background: "transparent",
+          display: "grid",
+          placeItems: "center",
+          color: xColor,
+          fontSize: Math.max(
+            7,
+            zoom * (xSize / 100)
+          ),
+          fontWeight: 700,
+          lineHeight: 1,
+          touchAction: "none",
+        }}
+      >
+        {marks.has(key) ? "×" : ""}
+      </button>
+    );
+  })
+)}
                     </div>
                   </div>
                 </div>

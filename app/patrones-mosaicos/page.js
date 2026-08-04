@@ -297,9 +297,7 @@ export default function PatronesMosaicos() {
     }
 
     return `${row}-${column}`;
-  },
-  [columns, rows, zoom]
-);
+  
 
       const row = Math.floor(
         y / zoom

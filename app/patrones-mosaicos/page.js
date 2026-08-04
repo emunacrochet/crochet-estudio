@@ -1188,4 +1188,365 @@ export default function PatronesMosaicos() {
                     controlsMinimized
                       ? 60
                       : 190,
-               
+                               }}
+              />
+
+              <section
+                onPointerDown={
+                  handleBoardPointerDown
+                }
+                onPointerMove={
+                  handleBoardPointerMove
+                }
+                onPointerUp={
+                  handleBoardPointerEnd
+                }
+                onPointerCancel={
+                  handleBoardPointerEnd
+                }
+                onContextMenu={(event) =>
+                  event.preventDefault()
+                }
+                style={{
+                  ...cardStyle,
+                  position: "relative",
+                  height: "72vh",
+                  overflow: "hidden",
+                  padding: 0,
+                  touchAction: "none",
+                  userSelect: "none",
+                  WebkitUserSelect: "none",
+                  WebkitTouchCallout: "none",
+                }}
+              >
+                <div
+                  style={{
+                    position: "absolute",
+                    left: boardOffset.x,
+                    top: boardOffset.y,
+                    display: "grid",
+                    gridTemplateColumns: `${NUMBER_GUTTER}px ${
+                      columns * zoom
+                    }px`,
+                    gridTemplateRows: `${TOP_GUTTER}px ${
+                      rows * zoom
+                    }px`,
+                    width:
+                      NUMBER_GUTTER +
+                      columns * zoom,
+                    height:
+                      TOP_GUTTER +
+                      rows * zoom,
+                  }}
+                >
+                  <div
+                    style={{
+                      gridColumn: 1,
+                      gridRow: 1,
+                      background: COLORS.white,
+                      borderRight: `1px solid ${COLORS.border}`,
+                      borderBottom: `1px solid ${COLORS.border}`,
+                    }}
+                  />
+
+                  <div
+                    style={{
+                      gridColumn: 2,
+                      gridRow: 1,
+                      display: "grid",
+                      gridTemplateColumns: `repeat(${columns}, ${zoom}px)`,
+                      background: COLORS.white,
+                    }}
+                  >
+                    {Array.from({
+                      length: columns,
+                    }).map((_, column) => (
+                      <div
+                        key={`column-${column}`}
+                        style={{
+                          width: zoom,
+                          height: TOP_GUTTER,
+                          display: "grid",
+                          placeItems: "center",
+                          fontSize: Math.max(
+                            8,
+                            Math.min(
+                              12,
+                              zoom * 0.5
+                            )
+                          ),
+                          color: COLORS.muted,
+                          borderRight: `1px solid ${COLORS.border}`,
+                          boxSizing: "border-box",
+                        }}
+                      >
+                        {column + 1}
+                      </div>
+                    ))}
+                  </div>
+
+                  <div
+                    style={{
+                      gridColumn: 1,
+                      gridRow: 2,
+                      display: "grid",
+                      gridTemplateRows: `repeat(${rows}, ${zoom}px)`,
+                      background: COLORS.white,
+                    }}
+                  >
+                    {Array.from({
+                      length: rows,
+                    }).map((_, row) => (
+                      <div
+                        key={`row-${row}`}
+                        style={{
+                          width: NUMBER_GUTTER,
+                          height: zoom,
+                          display: "grid",
+                          placeItems: "center",
+                          fontSize: Math.max(
+                            8,
+                            Math.min(
+                              12,
+                              zoom * 0.5
+                            )
+                          ),
+                          color: COLORS.muted,
+                          borderRight: `1px solid ${COLORS.border}`,
+                          borderBottom: `1px solid ${COLORS.border}`,
+                          boxSizing: "border-box",
+                        }}
+                      >
+                        {row + 1}
+                      </div>
+                    ))}
+                  </div>
+
+                  <div
+                    ref={boardRef}
+                    style={{
+                      gridColumn: 2,
+                      gridRow: 2,
+                      position: "relative",
+                      width: columns * zoom,
+                      height: rows * zoom,
+                    }}
+                  >
+                    <canvas
+                      ref={canvasRef}
+                      style={{
+                        position: "absolute",
+                        inset: 0,
+                        width: columns * zoom,
+                        height: rows * zoom,
+                        imageRendering: "pixelated",
+                        pointerEvents: "none",
+                      }}
+                    />
+
+                    {marks.map((mark) => (
+                      <button
+                        key={mark.id}
+                        type="button"
+                        aria-label="X marcada"
+                        onPointerDown={(event) => {
+                          if (tool !== "erase") {
+                            return;
+                          }
+
+                          event.preventDefault();
+                          event.stopPropagation();
+
+                          removeMarkById(mark.id);
+                        }}
+                        style={{
+                          position: "absolute",
+                          left: mark.x * zoom,
+                          top: mark.y * zoom,
+                          transform:
+                            "translate(-50%, -50%)",
+                          width: Math.max(
+                            18,
+                            zoom * 1.15
+                          ),
+                          height: Math.max(
+                            18,
+                            zoom * 1.15
+                          ),
+                          padding: 0,
+                          margin: 0,
+                          border: "none",
+                          background: "transparent",
+                          display: "grid",
+                          placeItems: "center",
+                          color: xColor,
+                          fontSize: Math.max(
+                            7,
+                            zoom *
+                              (xSize / 100)
+                          ),
+                          fontWeight: 700,
+                          lineHeight: 1,
+                          pointerEvents:
+                            tool === "erase"
+                              ? "auto"
+                              : "none",
+                          touchAction: "none",
+                        }}
+                      >
+                        ×
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </section>
+            </>
+          )}
+        </div>
+
+        {imageSrc &&
+          referenceOpen && (
+            <aside
+              onPointerDown={
+                startReferenceDrag
+              }
+              onPointerMove={
+                moveReference
+              }
+              onPointerUp={
+                stopReferenceDrag
+              }
+              onPointerCancel={
+                stopReferenceDrag
+              }
+              style={{
+                position: "fixed",
+                left: referencePosition.x,
+                top: referencePosition.y,
+                zIndex: 1300,
+                width:
+                  referenceMinimized
+                    ? 190
+                    : "min(310px, calc(100vw - 36px))",
+                background: COLORS.white,
+                border: `1px solid ${COLORS.border}`,
+                borderRadius: 14,
+                boxShadow:
+                  "0 8px 28px rgba(63, 63, 63, 0.22)",
+                overflow: "hidden",
+                touchAction: "none",
+                userSelect: "none",
+              }}
+            >
+              <div
+                style={{
+                  height: 42,
+                  padding: "0 8px 0 12px",
+                  background:
+                    COLORS.charcoal,
+                  color: COLORS.white,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent:
+                    "space-between",
+                  cursor: "move",
+                }}
+              >
+                <strong
+                  style={{
+                    fontSize: 13,
+                  }}
+                >
+                  Imagen de referencia
+                </strong>
+
+                <div
+                  style={{
+                    display: "flex",
+                    gap: 5,
+                  }}
+                >
+                  <button
+                    type="button"
+                    onPointerDown={(event) =>
+                      event.stopPropagation()
+                    }
+                    onClick={() =>
+                      setReferenceMinimized(
+                        (value) => !value
+                      )
+                    }
+                    style={{
+                      width: 30,
+                      height: 30,
+                      padding: 0,
+                      border: "none",
+                      borderRadius: 8,
+                      background:
+                        "rgba(255, 255, 255, 0.16)",
+                      color: COLORS.white,
+                      fontSize: 18,
+                    }}
+                  >
+                    {referenceMinimized
+                      ? "+"
+                      : "−"}
+                  </button>
+
+                  <button
+                    type="button"
+                    onPointerDown={(event) =>
+                      event.stopPropagation()
+                    }
+                    onClick={() =>
+                      setReferenceOpen(false)
+                    }
+                    style={{
+                      width: 30,
+                      height: 30,
+                      padding: 0,
+                      border: "none",
+                      borderRadius: 8,
+                      background:
+                        "rgba(255, 255, 255, 0.16)",
+                      color: COLORS.white,
+                      fontSize: 18,
+                    }}
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
+
+              {!referenceMinimized && (
+                <div
+                  style={{
+                    padding: 8,
+                    background: COLORS.cream,
+                  }}
+                >
+                  <img
+                    src={imageSrc}
+                    alt="Referencia del patrón"
+                    draggable={false}
+                    onDragStart={(event) =>
+                      event.preventDefault()
+                    }
+                    style={{
+                      display: "block",
+                      width: "100%",
+                      maxHeight: 360,
+                      objectFit: "contain",
+                      borderRadius: 8,
+                      background: COLORS.white,
+                      pointerEvents: "none",
+                    }}
+                  />
+                </div>
+              )}
+            </aside>
+          )}
+            </main>
+    </AuthGuard>
+  );
+}
